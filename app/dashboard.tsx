@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Dimensions,
+  GestureResponderEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -14,6 +15,17 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Line, Circle, Text as SvgText } from 'react-native-svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Weekly performance data
+const weeklyData = [
+  { day: 'Mon', profit: 120 },
+  { day: 'Tue', profit: 85 },
+  { day: 'Wed', profit: 50 },
+  { day: 'Thu', profit: 280 },
+  { day: 'Fri', profit: 620 },
+  { day: 'Sat', profit: 895 },
+  { day: 'Sun', profit: 1400 },
+];
 
 // Sample bet data
 const sampleBets = [
@@ -63,9 +75,14 @@ type TimePeriod = 'Daily' | 'Weekly' | 'Monthly' | 'Yearly';
 export default function DashboardScreen() {
   const router = useRouter();
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Weekly');
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const handleLogout = () => {
     router.replace('/');
+  };
+
+  const handleDismissTooltip = () => {
+    setSelectedDay(null);
   };
 
   return (
@@ -117,10 +134,14 @@ export default function DashboardScreen() {
         </View>
 
         {/* Performance Curve Card */}
-        <View style={styles.chartCard}>
+        <TouchableOpacity
+          style={styles.chartCard}
+          activeOpacity={1}
+          onPress={handleDismissTooltip}
+        >
           <Text style={styles.chartLabel}>PERFORMANCE CURVE</Text>
-          <PerformanceChart />
-        </View>
+          <PerformanceChart selectedDay={selectedDay} setSelectedDay={setSelectedDay} />
+        </TouchableOpacity>
 
         {/* Recent Activity Section */}
         <View style={styles.activitySection}>
@@ -179,31 +200,27 @@ export default function DashboardScreen() {
 }
 
 // Performance Chart Component
-function PerformanceChart() {
+interface PerformanceChartProps {
+  selectedDay: string | null;
+  setSelectedDay: (day: string | null) => void;
+}
+
+function PerformanceChart({ selectedDay, setSelectedDay }: PerformanceChartProps) {
   const chartWidth = SCREEN_WIDTH - 80;
-  const chartHeight = 180;
-  const padding = 20;
+  const chartHeight = 220;
+  const padding = 40;
   const effectiveWidth = chartWidth - padding * 2;
-  const effectiveHeight = chartHeight - padding * 2;
+  const effectiveHeight = chartHeight - padding * 2 - 20;
 
-  // Sample data points (Mon - Sun)
-  const dataPoints = [
-    { x: 0, y: 0.6 },
-    { x: 1, y: 0.55 },
-    { x: 2, y: 0.5 },
-    { x: 3, y: 0.52 },
-    { x: 4, y: 0.65 },
-    { x: 5, y: 0.85 },
-    { x: 6, y: 0.95 },
-  ];
+  // Calculate max profit for Y-axis scaling
+  const maxProfit = Math.max(...weeklyData.map(d => d.profit));
+  const yAxisMax = Math.ceil(maxProfit / 350) * 350; // Round to nearest 350
 
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  // Convert data points to path coordinates
-  const points = dataPoints.map((point, index) => {
-    const x = padding + (point.x / 6) * effectiveWidth;
-    const y = padding + effectiveHeight - point.y * effectiveHeight;
-    return { x, y };
+  // Convert data points to chart coordinates
+  const points = weeklyData.map((data, index) => {
+    const x = padding + (index / 6) * effectiveWidth;
+    const y = padding + effectiveHeight - (data.profit / yAxisMax) * effectiveHeight;
+    return { x, y, ...data };
   });
 
   // Create smooth curve path
@@ -215,58 +232,114 @@ function PerformanceChart() {
     pathD += ` Q ${cpx} ${prev.y}, ${curr.x} ${curr.y}`;
   }
 
+  // Generate Y-axis labels with dollar amounts
+  const yAxisLabels = [];
+  for (let i = 0; i <= 4; i++) {
+    yAxisLabels.push((i * yAxisMax) / 4);
+  }
+
+  const handleDotPress = (day: string, e: GestureResponderEvent) => {
+    e.stopPropagation();
+    setSelectedDay(selectedDay === day ? null : day);
+  };
+
+  const getSelectedDayData = () => {
+    if (!selectedDay) return null;
+    return weeklyData.find(d => d.day === selectedDay);
+  };
+
+  const selectedData = getSelectedDayData();
+
   return (
-    <View style={styles.chartContainer}>
-      <Svg width={chartWidth} height={chartHeight}>
-        {/* Y-axis reference lines */}
-        {[0, 1, 2, 3, 4].map((i) => (
-          <Line
-            key={i}
-            x1={padding}
-            y1={padding + (i * effectiveHeight) / 4}
-            x2={chartWidth - padding}
-            y2={padding + (i * effectiveHeight) / 4}
-            stroke="#F5F5F5"
-            strokeWidth="1"
-          />
-        ))}
+    <View style={styles.chartWrapper}>
+      <View style={styles.chartContainer}>
+        <Svg width={chartWidth} height={chartHeight}>
+          {/* Y-axis reference lines */}
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Line
+              key={`line-${i}`}
+              x1={padding}
+              y1={padding + (i * effectiveHeight) / 4}
+              x2={chartWidth - padding}
+              y2={padding + (i * effectiveHeight) / 4}
+              stroke="#F5F5F5"
+              strokeWidth="1"
+            />
+          ))}
 
-        {/* Performance curve */}
-        <Path d={pathD} stroke="#6366F1" strokeWidth="3" fill="none" />
+          {/* Performance curve */}
+          <Path d={pathD} stroke="#6366F1" strokeWidth="3" fill="none" />
 
-        {/* Data points */}
+          {/* Data points as circles in SVG */}
+          {points.map((point, index) => (
+            <Circle
+              key={`circle-${index}`}
+              cx={point.x}
+              cy={point.y}
+              r={selectedDay === point.day ? 7 : 5}
+              fill="#6366F1"
+              stroke="#FFFFFF"
+              strokeWidth={selectedDay === point.day ? 4 : 3}
+            />
+          ))}
+
+          {/* X-axis labels */}
+          {weeklyData.map((data, index) => (
+            <SvgText
+              key={`day-${index}`}
+              x={padding + (index / 6) * effectiveWidth}
+              y={chartHeight - 8}
+              fontSize="11"
+              fill="#9CA3AF"
+              textAnchor="middle"
+              fontWeight="500"
+            >
+              {data.day}
+            </SvgText>
+          ))}
+
+          {/* Y-axis labels with dollar amounts */}
+          {yAxisLabels.map((value, i) => (
+            <SvgText
+              key={`yaxis-${i}`}
+              x={padding - 10}
+              y={padding + (4 - i) * (effectiveHeight / 4) + 4}
+              fontSize="10"
+              fill="#9CA3AF"
+              textAnchor="end"
+            >
+              ${Math.round(value).toLocaleString()}
+            </SvgText>
+          ))}
+        </Svg>
+
+        {/* Interactive Dots with Tooltips */}
         {points.map((point, index) => (
-          <Circle key={index} cx={point.x} cy={point.y} r="4" fill="#6366F1" />
-        ))}
-
-        {/* X-axis labels */}
-        {days.map((day, index) => (
-          <SvgText
-            key={day}
-            x={padding + (index / 6) * effectiveWidth}
-            y={chartHeight - 5}
-            fontSize="10"
-            fill="#9CA3AF"
-            textAnchor="middle"
+          <TouchableOpacity
+            key={`dot-${index}`}
+            style={[
+              styles.dotTouchable,
+              {
+                left: point.x - 15,
+                top: point.y - 15,
+                transform: [{ scale: selectedDay === point.day ? 1.2 : 1 }],
+              },
+            ]}
+            onPress={(e) => handleDotPress(point.day, e)}
+            activeOpacity={0.8}
           >
-            {day}
-          </SvgText>
+            {/* Tooltip */}
+            {selectedDay === point.day && (
+              <View style={styles.tooltip}>
+                <Text style={styles.tooltipText}>
+                  {point.day}: +${point.profit}
+                </Text>
+                <View style={styles.tooltipArrow} />
+              </View>
+            )}
+          </TouchableOpacity>
         ))}
-
-        {/* Y-axis labels */}
-        {[0, 1, 2, 3, 4].map((i) => (
-          <SvgText
-            key={i}
-            x="5"
-            y={padding + (4 - i) * (effectiveHeight / 4) + 3}
-            fontSize="10"
-            fill="#9CA3AF"
-            textAnchor="start"
-          >
-            0
-          </SvgText>
-        ))}
-      </Svg>
+      </View>
     </View>
   );
 }
