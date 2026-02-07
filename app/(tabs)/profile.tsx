@@ -71,7 +71,7 @@ export default function ProfileScreen() {
         {/* Card 3 - Settings Menu Card */}
         <View style={styles.menuCard}>
           {/* Account Settings */}
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/account-settings')}>
             <View style={styles.menuIconCircle}>
               <Ionicons name="person-outline" size={22} color="#6B6B6B" />
             </View>
