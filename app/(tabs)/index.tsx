@@ -17,6 +17,7 @@ import Svg, { Path, Line, Circle, Text as SvgText } from 'react-native-svg';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
+import { formatCurrency, formatPercent, formatPL } from '@/lib/formatters';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
