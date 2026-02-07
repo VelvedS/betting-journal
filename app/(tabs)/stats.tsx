@@ -95,9 +95,9 @@ export default function StatsScreen() {
 
   // Win rate: exclude pending/void from denominator
   const settledBets = wins + losses;
-  const winRate = settledBets > 0 ? ((wins / settledBets) * 100).toFixed(1) : '0.0';
+  const winRateValue = settledBets > 0 ? (wins / settledBets) * 100 : 0;
 
-  const roi = totalWagered > 0 ? ((netPL / totalWagered) * 100).toFixed(1) : '0.0';
+  const roiValue = totalWagered > 0 ? (netPL / totalWagered) * 100 : 0;
 
   const getValueColor = (value: number) => {
     if (value > 0) return '#10B981';
@@ -105,17 +105,11 @@ export default function StatsScreen() {
     return '#1A1A1A';
   };
 
-  const formatNetPL = (value: number) => {
-    if (value > 0) return `+$${value}`;
-    if (value < 0) return `-$${Math.abs(value)}`;
-    return '$0';
-  };
-
-  const formatROI = (value: string) => {
-    const num = parseFloat(value);
-    if (num > 0) return `+${value}%`;
-    if (num < 0) return `${value}%`;
-    return '0.0%';
+  // Helper function to get responsive font size based on string length
+  const getResponsiveFontSize = (text: string) => {
+    if (text.length > 8) return 14;
+    if (text.length > 6) return 16;
+    return 20;
   };
 
   const subtitleText = filteredCount === 1 ? '1 Total Bet' : `${filteredCount} Total Bets`;
