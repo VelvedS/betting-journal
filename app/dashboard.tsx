@@ -500,11 +500,26 @@ const styles = StyleSheet.create({
   activitySection: {
     marginBottom: 24,
   },
+  activityTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   activityTitle: {
     fontSize: 22,
     fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 16,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6366F1',
   },
   activityCard: {
     backgroundColor: '#FFFFFF',
