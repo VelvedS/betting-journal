@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Line, Circle, Text as SvgText } from 'react-native-svg';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -77,48 +78,15 @@ const chartDataMap: Record<TimePeriod, ChartDataPoint[]> = {
   Yearly: yearlyData,
 };
 
-// Sample bet data
-const sampleBets = [
-  {
-    id: '#0001',
-    platform: 'DraftKings',
-    status: 'WIN',
-    betType: 'Parlay (3 legs)',
-    wager: 50,
-    potential: 425,
-    roi: 750,
-    timestamp: 'Today, 3:45 PM',
-    statusColor: '#059669',
-    statusBg: '#D1FAE5',
-    icon: 'checkmark-circle',
-  },
-  {
-    id: '#0002',
-    platform: 'Kalshi',
-    status: 'PENDING',
-    betType: 'Spread',
-    wager: 100,
-    potential: 190,
-    roi: 90,
-    timestamp: 'Today, 1:20 PM',
-    statusColor: '#D97706',
-    statusBg: '#FEF3C7',
-    icon: 'time',
-  },
-  {
-    id: '#0003',
-    platform: 'PrizePicks',
-    status: 'LOSS',
-    betType: 'Over/Under',
-    wager: 25,
-    potential: 47.5,
-    roi: 90,
-    timestamp: 'Yesterday, 8:30 PM',
-    statusColor: '#DC2626',
-    statusBg: '#FEE2E2',
-    icon: 'close-circle',
-  },
-];
+const getStatusConfig = (status: string) => {
+  switch (status) {
+    case 'won': return { label: 'WIN', statusColor: '#2DC672', statusBg: '#E8F8F0', icon: 'checkmark-circle' };
+    case 'lost': return { label: 'LOSS', statusColor: '#E85D5D', statusBg: '#FFECEC', icon: 'close-circle' };
+    case 'pending': return { label: 'PENDING', statusColor: '#F5A623', statusBg: '#FFF5E0', icon: 'time' };
+    case 'void': return { label: 'VOID', statusColor: '#999999', statusBg: '#F0F0F0', icon: 'ban' };
+    default: return { label: 'PENDING', statusColor: '#F5A623', statusBg: '#FFF5E0', icon: 'time' };
+  }
+};
 
 const emptyChartData: ChartDataPoint[] = [
   { label: 'Mon', profit: 0 },
@@ -135,18 +103,47 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Weekly');
   const [hoveredPoint, setHoveredPoint] = useState<string | null>(null);
-  const [betCount, setBetCount] = useState<number | null>(null);
+  const [recentBets, setRecentBets] = useState<any[]>([]);
+  const [totalProfit, setTotalProfit] = useState<number>(0);
+  const [totalWagered, setTotalWagered] = useState<number>(0);
 
-  useEffect(() => {
+  const fetchDashboardData = useCallback(async () => {
     if (!user) return;
-    supabase
+    const { data: bets } = await supabase
       .from('bets')
-      .select('id', { count: 'exact', head: true })
+      .select('*')
       .eq('user_id', user.id)
-      .then(({ count }) => setBetCount(count ?? 0));
+      .order('placed_at', { ascending: false })
+      .limit(5);
+    setRecentBets(bets || []);
+
+    const { data: allBets } = await supabase
+      .from('bets')
+      .select('status, wager, potential_payout')
+      .eq('user_id', user.id);
+    if (allBets && allBets.length > 0) {
+      let profit = 0;
+      let wagered = 0;
+      for (const b of allBets) {
+        wagered += b.wager || 0;
+        if (b.status === 'won') profit += (b.potential_payout || 0) - (b.wager || 0);
+        else if (b.status === 'lost') profit -= b.wager || 0;
+      }
+      setTotalProfit(profit);
+      setTotalWagered(wagered);
+    } else {
+      setTotalProfit(0);
+      setTotalWagered(0);
+    }
   }, [user]);
 
-  const hasBets = betCount !== null && betCount > 0;
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboardData();
+    }, [fetchDashboardData])
+  );
+
+  const hasBets = recentBets.length > 0;
 
   const handleDismissTooltip = () => {
     setHoveredPoint(null);
@@ -173,10 +170,14 @@ export default function HomeScreen() {
           <View style={styles.profitValueRow}>
             {hasBets ? (
               <>
-                <Text style={styles.profitValue}>$ +2,450</Text>
+                <Text style={[styles.profitValue, { color: totalProfit >= 0 ? '#10B981' : '#EF4444' }]}>
+                  {totalProfit >= 0 ? `$+${Math.abs(totalProfit).toLocaleString()}` : `-$${Math.abs(totalProfit).toLocaleString()}`}
+                </Text>
                 <View style={styles.percentageContainer}>
-                  <Ionicons name="trending-up" size={20} color="#10B981" />
-                  <Text style={styles.percentageText}>+245.0%</Text>
+                  <Ionicons name={totalProfit >= 0 ? "trending-up" : "trending-down"} size={20} color={totalProfit >= 0 ? "#10B981" : "#EF4444"} />
+                  <Text style={[styles.percentageText, { color: totalProfit >= 0 ? '#10B981' : '#EF4444' }]}>
+                    {totalWagered > 0 ? `${totalProfit >= 0 ? '+' : ''}${((totalProfit / totalWagered) * 100).toFixed(1)}%` : '0.0%'}
+                  </Text>
                 </View>
               </>
             ) : (
@@ -242,25 +243,29 @@ export default function HomeScreen() {
           </View>
 
           {hasBets ? (
-            sampleBets.map((bet) => (
+            recentBets.map((bet) => {
+              const sc = getStatusConfig(bet.status);
+              const roiPct = bet.wager > 0 ? (((bet.potential_payout || 0) - bet.wager) / bet.wager * 100).toFixed(0) : '0';
+              const ts = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+              return (
               <TouchableOpacity
                 key={bet.id}
                 style={styles.activityCard}
                 activeOpacity={0.7}
-                onPress={() => router.push(`/bet-details/${bet.id.replace('#', '')}`)}
+                onPress={() => router.push(`/bet-details/${bet.id}`)}
               >
                 <View style={styles.activityHeader}>
                   <View style={styles.activityHeaderLeft}>
-                    <Text style={styles.platformName}>{bet.platform}</Text>
-                    <View style={[styles.badge, { backgroundColor: bet.statusBg }]}>
-                      <Text style={[styles.badgeText, { color: bet.statusColor }]}>
-                        {bet.status}
+                    <Text style={styles.platformName}>{bet.sportsbook || 'Unknown'}</Text>
+                    <View style={[styles.badge, { backgroundColor: sc.statusBg }]}>
+                      <Text style={[styles.badgeText, { color: sc.statusColor }]}>
+                        {sc.label}
                       </Text>
                     </View>
                   </View>
-                  <Ionicons name={bet.icon as any} size={24} color={bet.statusColor} />
+                  <Ionicons name={sc.icon as any} size={24} color={sc.statusColor} />
                 </View>
-                <Text style={styles.betType}>{bet.betType}</Text>
+                <Text style={styles.betType}>{bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : ''}</Text>
                 <View style={styles.statsRow}>
                   <View style={styles.statItem}>
                     <Text style={styles.statLabel}>WAGER</Text>
@@ -268,19 +273,20 @@ export default function HomeScreen() {
                   </View>
                   <View style={styles.statItem}>
                     <Text style={styles.statLabel}>POTENTIAL</Text>
-                    <Text style={styles.statValue}>${bet.potential}</Text>
+                    <Text style={styles.statValue}>${(bet.potential_payout || 0).toFixed(2)}</Text>
                   </View>
                   <View style={styles.statItem}>
                     <Text style={styles.statLabel}>ROI</Text>
-                    <Text style={styles.roiValue}>+{bet.roi}%</Text>
+                    <Text style={styles.roiValue}>+{roiPct}%</Text>
                   </View>
                 </View>
                 <View style={styles.activityFooter}>
-                  <Text style={styles.timestamp}>{bet.timestamp}</Text>
-                  <Text style={styles.betId}>{bet.id}</Text>
+                  <Text style={styles.timestamp}>{ts}</Text>
+                  <Text style={styles.betId}>#{String(bet.id).slice(-4)}</Text>
                 </View>
               </TouchableOpacity>
-            ))
+              );
+            })
           ) : (
             <View style={styles.emptyStateCard}>
               <View style={styles.emptyIconCircle}>
