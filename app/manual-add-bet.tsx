@@ -698,6 +698,80 @@ export default function ManualAddBetScreen() {
           )}
         </View>
 
+        {/* Field 10B - Parlay Legs (only if bet_type === 'parlay') */}
+        {betType === 'parlay' && (
+          <View style={styles.formField}>
+            <View style={styles.parlayHeaderRow}>
+              <Text style={styles.fieldLabel}>Parlay Legs</Text>
+              <View style={styles.parlayCountBadge}>
+                <Text style={styles.parlayCountText}>{parlayLegs.length}</Text>
+              </View>
+            </View>
+
+            {parlayLegs.map((leg, index) => (
+              <View key={index} style={styles.parlayLegCard}>
+                <View style={styles.parlayLegContent}>
+                  <TextInput
+                    style={[styles.textInput, styles.parlayLegInput]}
+                    placeholder="e.g. Lakers ML"
+                    placeholderTextColor="#9B9B9B"
+                    value={leg.description}
+                    onChangeText={(val) => updateParlayLeg(index, 'description', val)}
+                  />
+                  <TextInput
+                    style={[styles.textInput, styles.parlayLegInput]}
+                    placeholder="e.g. +120"
+                    placeholderTextColor="#9B9B9B"
+                    value={leg.odds}
+                    onChangeText={(val) => updateParlayLeg(index, 'odds', val)}
+                  />
+
+                  <View style={styles.parlayLegStatusRow}>
+                    {(['pending', 'won', 'lost'] as BetStatus[]).map((s) => {
+                      if (s === 'void') return null;
+                      const isSelected = leg.status === s;
+                      return (
+                        <TouchableOpacity
+                          key={s}
+                          style={[
+                            styles.parlayStatusPill,
+                            isSelected && (s === 'won' ? styles.parlayStatusWon : s === 'lost' ? styles.parlayStatusLost : styles.parlayStatusPending),
+                          ]}
+                          onPress={() => updateParlayLeg(index, 'status', s)}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.parlayStatusText,
+                              isSelected && styles.parlayStatusTextActive,
+                            ]}
+                          >
+                            {s.charAt(0).toUpperCase() + s.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.parlayDeleteBtn}
+                  onPress={() => removeParlayLeg(index)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close" size={18} color="#E85D5D" />
+                </TouchableOpacity>
+              </View>
+            ))}
+
+            <TouchableOpacity style={styles.addLegButton} onPress={addParlayLeg} activeOpacity={0.7}>
+              <Ionicons name="add-circle-outline" size={18} color="#6366F1" />
+              <Text style={styles.addLegText}>Add Leg</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Field 11 - Notes */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>Notes (Optional)</Text>
