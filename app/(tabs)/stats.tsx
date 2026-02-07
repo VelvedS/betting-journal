@@ -11,6 +11,8 @@ import {
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 type FilterType = 'All' | 'Wins' | 'Losses' | 'Pending';
 
@@ -137,7 +139,20 @@ const allBets: BetData[] = [
 
 export default function StatsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All');
+  const [betCount, setBetCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('bets')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .then(({ count }) => setBetCount(count ?? 0));
+  }, [user]);
+
+  const hasBets = betCount !== null && betCount > 0;
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -150,14 +165,16 @@ export default function StatsScreen() {
     }).start();
   }, [selectedFilter]);
 
-  const totalWins = allBets.filter(bet => bet.status === 'WIN').length;
-  const totalLosses = allBets.filter(bet => bet.status === 'LOSS').length;
-  const totalPending = allBets.filter(bet => bet.status === 'PENDING').length;
-  const totalAllBets = allBets.length;
+  const betsSource = hasBets ? allBets : [];
+
+  const totalWins = betsSource.filter(bet => bet.status === 'WIN').length;
+  const totalLosses = betsSource.filter(bet => bet.status === 'LOSS').length;
+  const totalPending = betsSource.filter(bet => bet.status === 'PENDING').length;
+  const totalAllBets = betsSource.length;
 
   const filteredBets = selectedFilter === 'All'
-    ? allBets
-    : allBets.filter(bet => {
+    ? betsSource
+    : betsSource.filter(bet => {
         if (selectedFilter === 'Wins') return bet.status === 'WIN';
         if (selectedFilter === 'Losses') return bet.status === 'LOSS';
         if (selectedFilter === 'Pending') return bet.status === 'PENDING';
@@ -311,48 +328,57 @@ export default function StatsScreen() {
 
         {/* Bet Cards List */}
         <View style={styles.betsList}>
-          {filteredBets.map((bet) => (
-            <TouchableOpacity
-              key={bet.id}
-              style={styles.betCard}
-              activeOpacity={0.7}
-              onPress={() => router.push(`/bet-details/${bet.id.replace('#', '')}`)}
-            >
-              <View style={styles.betHeader}>
-                <View style={styles.betHeaderLeft}>
-                  <Text style={styles.platformName}>{bet.platform}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: bet.statusBg }]}>
-                    <Text style={[styles.statusBadgeText, { color: bet.statusColor }]}>
-                      {bet.status}
-                    </Text>
+          {hasBets ? (
+            filteredBets.map((bet) => (
+              <TouchableOpacity
+                key={bet.id}
+                style={styles.betCard}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/bet-details/${bet.id.replace('#', '')}`)}
+              >
+                <View style={styles.betHeader}>
+                  <View style={styles.betHeaderLeft}>
+                    <Text style={styles.platformName}>{bet.platform}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: bet.statusBg }]}>
+                      <Text style={[styles.statusBadgeText, { color: bet.statusColor }]}>
+                        {bet.status}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons name={bet.iconName} size={24} color={bet.statusColor} />
+                </View>
+                <Text style={styles.betType}>{bet.betType}</Text>
+                <View style={styles.statsRow}>
+                  <View style={styles.statColumn}>
+                    <Text style={styles.statLabel}>WAGER</Text>
+                    <Text style={styles.statValue}>${bet.wager}</Text>
+                  </View>
+                  <View style={styles.statColumn}>
+                    <Text style={styles.statLabel}>POTENTIAL</Text>
+                    <Text style={styles.statValue}>${bet.potential}</Text>
+                  </View>
+                  <View style={styles.statColumn}>
+                    <Text style={styles.statLabel}>ROI</Text>
+                    <Text style={styles.roiValue}>+{bet.roi}%</Text>
                   </View>
                 </View>
-                <Ionicons name={bet.iconName} size={24} color={bet.statusColor} />
-              </View>
-
-              <Text style={styles.betType}>{bet.betType}</Text>
-
-              <View style={styles.statsRow}>
-                <View style={styles.statColumn}>
-                  <Text style={styles.statLabel}>WAGER</Text>
-                  <Text style={styles.statValue}>${bet.wager}</Text>
+                <View style={styles.betFooter}>
+                  <Text style={styles.betDate}>{bet.date}</Text>
+                  <Text style={styles.betId}>{bet.id}</Text>
                 </View>
-                <View style={styles.statColumn}>
-                  <Text style={styles.statLabel}>POTENTIAL</Text>
-                  <Text style={styles.statValue}>${bet.potential}</Text>
-                </View>
-                <View style={styles.statColumn}>
-                  <Text style={styles.statLabel}>ROI</Text>
-                  <Text style={styles.roiValue}>+{bet.roi}%</Text>
-                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyStateCard}>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="bar-chart-outline" size={36} color="#6366F1" />
               </View>
-
-              <View style={styles.betFooter}>
-                <Text style={styles.betDate}>{bet.date}</Text>
-                <Text style={styles.betId}>{bet.id}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+              <Text style={styles.emptyTitle}>No betting history</Text>
+              <Text style={styles.emptySubtitle}>
+                Your bets will appear here once you start tracking
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -534,5 +560,34 @@ const styles = StyleSheet.create({
   betId: {
     fontSize: 12,
     color: '#9CA3AF',
+  },
+  emptyStateCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 40,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: '#6B6B6B',
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });
