@@ -14,6 +14,8 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Line, Circle, Text as SvgText } from 'react-native-svg';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -118,14 +120,39 @@ const sampleBets = [
   },
 ];
 
+const emptyChartData: ChartDataPoint[] = [
+  { label: 'Mon', profit: 0 },
+  { label: 'Tue', profit: 0 },
+  { label: 'Wed', profit: 0 },
+  { label: 'Thu', profit: 0 },
+  { label: 'Fri', profit: 0 },
+  { label: 'Sat', profit: 0 },
+  { label: 'Sun', profit: 0 },
+];
+
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Weekly');
   const [hoveredPoint, setHoveredPoint] = useState<string | null>(null);
+  const [betCount, setBetCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('bets')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .then(({ count }) => setBetCount(count ?? 0));
+  }, [user]);
+
+  const hasBets = betCount !== null && betCount > 0;
 
   const handleDismissTooltip = () => {
     setHoveredPoint(null);
   };
+
+  const displayName = user?.user_metadata?.full_name?.split(' ')[0] || 'there';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -136,7 +163,7 @@ export default function HomeScreen() {
       >
         {/* Header Section */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Welcome Back, John</Text>
+          <Text style={styles.headerTitle}>Welcome Back, {displayName}</Text>
           <Text style={styles.headerQuote}>"Don't just play the books, keep your own."</Text>
         </View>
 
@@ -144,11 +171,17 @@ export default function HomeScreen() {
         <View style={styles.profitCard}>
           <Text style={styles.profitLabel}>TOTAL PROFIT/LOSS</Text>
           <View style={styles.profitValueRow}>
-            <Text style={styles.profitValue}>$ +2,450</Text>
-            <View style={styles.percentageContainer}>
-              <Ionicons name="trending-up" size={20} color="#10B981" />
-              <Text style={styles.percentageText}>+245.0%</Text>
-            </View>
+            {hasBets ? (
+              <>
+                <Text style={styles.profitValue}>$ +2,450</Text>
+                <View style={styles.percentageContainer}>
+                  <Ionicons name="trending-up" size={20} color="#10B981" />
+                  <Text style={styles.percentageText}>+245.0%</Text>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.profitValueEmpty}>$0.00</Text>
+            )}
           </View>
         </View>
 
@@ -186,9 +219,9 @@ export default function HomeScreen() {
         >
           <Text style={styles.chartLabel}>PERFORMANCE CURVE</Text>
           <PerformanceChart
-            data={chartDataMap[selectedPeriod]}
+            data={hasBets ? chartDataMap[selectedPeriod] : emptyChartData}
             hoveredPoint={hoveredPoint}
-            setHoveredPoint={setHoveredPoint}
+            setHoveredPoint={hasBets ? setHoveredPoint : () => {}}
             period={selectedPeriod}
           />
         </TouchableOpacity>
@@ -197,61 +230,75 @@ export default function HomeScreen() {
         <View style={styles.activitySection}>
           <View style={styles.activityTitleRow}>
             <Text style={styles.activityTitle}>Recent Activity</Text>
-            <TouchableOpacity
-              style={styles.viewAllButton}
-              onPress={() => router.push('/(tabs)/stats')}
-            >
-              <Text style={styles.viewAllText}>View All</Text>
-              <Ionicons name="arrow-forward" size={16} color="#6366F1" />
-            </TouchableOpacity>
+            {hasBets && (
+              <TouchableOpacity
+                style={styles.viewAllButton}
+                onPress={() => router.push('/(tabs)/stats')}
+              >
+                <Text style={styles.viewAllText}>View All</Text>
+                <Ionicons name="arrow-forward" size={16} color="#6366F1" />
+              </TouchableOpacity>
+            )}
           </View>
 
-          {sampleBets.map((bet) => (
-            <TouchableOpacity
-              key={bet.id}
-              style={styles.activityCard}
-              activeOpacity={0.7}
-              onPress={() => router.push(`/bet-details/${bet.id.replace('#', '')}`)}
-            >
-              {/* Header Row */}
-              <View style={styles.activityHeader}>
-                <View style={styles.activityHeaderLeft}>
-                  <Text style={styles.platformName}>{bet.platform}</Text>
-                  <View style={[styles.badge, { backgroundColor: bet.statusBg }]}>
-                    <Text style={[styles.badgeText, { color: bet.statusColor }]}>
-                      {bet.status}
-                    </Text>
+          {hasBets ? (
+            sampleBets.map((bet) => (
+              <TouchableOpacity
+                key={bet.id}
+                style={styles.activityCard}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/bet-details/${bet.id.replace('#', '')}`)}
+              >
+                <View style={styles.activityHeader}>
+                  <View style={styles.activityHeaderLeft}>
+                    <Text style={styles.platformName}>{bet.platform}</Text>
+                    <View style={[styles.badge, { backgroundColor: bet.statusBg }]}>
+                      <Text style={[styles.badgeText, { color: bet.statusColor }]}>
+                        {bet.status}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons name={bet.icon as any} size={24} color={bet.statusColor} />
+                </View>
+                <Text style={styles.betType}>{bet.betType}</Text>
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>WAGER</Text>
+                    <Text style={styles.statValue}>${bet.wager}</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>POTENTIAL</Text>
+                    <Text style={styles.statValue}>${bet.potential}</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>ROI</Text>
+                    <Text style={styles.roiValue}>+{bet.roi}%</Text>
                   </View>
                 </View>
-                <Ionicons name={bet.icon as any} size={24} color={bet.statusColor} />
-              </View>
-
-              {/* Bet Type */}
-              <Text style={styles.betType}>{bet.betType}</Text>
-
-              {/* Stats Row */}
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>WAGER</Text>
-                  <Text style={styles.statValue}>${bet.wager}</Text>
+                <View style={styles.activityFooter}>
+                  <Text style={styles.timestamp}>{bet.timestamp}</Text>
+                  <Text style={styles.betId}>{bet.id}</Text>
                 </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>POTENTIAL</Text>
-                  <Text style={styles.statValue}>${bet.potential}</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>ROI</Text>
-                  <Text style={styles.roiValue}>+{bet.roi}%</Text>
-                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyStateCard}>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="receipt-outline" size={36} color="#6366F1" />
               </View>
-
-              {/* Footer */}
-              <View style={styles.activityFooter}>
-                <Text style={styles.timestamp}>{bet.timestamp}</Text>
-                <Text style={styles.betId}>{bet.id}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+              <Text style={styles.emptyTitle}>No bets yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Start tracking your bets to see your performance
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyButton}
+                activeOpacity={0.8}
+                onPress={() => router.push('/(tabs)/add-bet')}
+              >
+                <Text style={styles.emptyButtonText}>Add Your First Bet</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
       </ScrollView>
@@ -501,6 +548,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#10B981',
   },
+  profitValueEmpty: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
   percentageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -701,5 +753,46 @@ const styles = StyleSheet.create({
   betId: {
     fontSize: 12,
     color: '#9CA3AF',
+  },
+  emptyStateCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 40,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: '#6B6B6B',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  emptyButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+  },
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
