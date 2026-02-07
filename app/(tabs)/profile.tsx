@@ -91,21 +91,6 @@ export default function ProfileScreen() {
     await signOut();
   };
 
-  const formatProfit = (value: number | null): string => {
-    if (value === null) return '—';
-    if (value === 0) return '$0';
-    const absValue = Math.abs(value);
-    if (absValue >= 1000) {
-      const formatted = (absValue / 1000).toFixed(1);
-      return value >= 0 ? `$${formatted}K` : `-$${formatted}K`;
-    }
-    return value >= 0 ? `$${Math.round(value)}` : `-$${Math.round(absValue)}`;
-  };
-
-  const formatWinRate = (value: number | null): string => {
-    if (value === null) return '—';
-    return `${Math.round(value)}%`;
-  };
 
   const profitColor = profit === null || profit >= 0 ? '#10B981' : '#E85D5D';
 
