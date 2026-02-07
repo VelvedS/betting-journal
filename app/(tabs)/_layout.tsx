@@ -84,10 +84,7 @@ const styles = StyleSheet.create({
     height: 85,
     paddingBottom: 20,
     paddingTop: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.06)',
     elevation: 8,
   },
   tabBarLabel: {
@@ -107,10 +104,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1A2E',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#1A1A2E',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    boxShadow: '0px 4px 8px rgba(26, 26, 46, 0.3)',
     elevation: 6,
   },
 });

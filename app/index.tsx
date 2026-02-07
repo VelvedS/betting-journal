@@ -303,10 +303,7 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.1)',
     elevation: 2,
   },
   signInButtonDisabled: {
@@ -350,10 +347,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#E5E5E5',
     gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.1)',
     elevation: 2,
   },
   appleIcon: {
