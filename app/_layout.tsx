@@ -17,6 +17,7 @@ export default function RootLayout() {
         <Stack.Screen name="bet-details/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="account-settings" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="preferences" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />
