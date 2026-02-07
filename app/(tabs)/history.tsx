@@ -1,24 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function HistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [betCount, setBetCount] = useState<number | null>(null);
 
-  useEffect(() => {
+  const fetchBetCount = useCallback(async () => {
     if (!user) return;
-    supabase
+    const { count } = await supabase
       .from('bets')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .then(({ count }) => setBetCount(count ?? 0));
+      .eq('user_id', user.id);
+    setBetCount(count ?? 0);
   }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchBetCount();
+    }, [fetchBetCount])
+  );
 
   const hasBets = betCount !== null && betCount > 0;
 
