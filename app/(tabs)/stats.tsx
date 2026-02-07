@@ -379,14 +379,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
     color: '#9CA3AF',
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   summaryValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1A1A1A',
   },
