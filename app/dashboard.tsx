@@ -447,8 +447,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   chartLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '400',
     color: '#6B6B6B',
     letterSpacing: 0.5,
     marginBottom: 16,
