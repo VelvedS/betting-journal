@@ -1,12 +1,101 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  Animated,
+  Dimensions,
+  TouchableWithoutFeedback,
+  PanResponder,
+  FlatList,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SHEET_HEIGHT = SCREEN_HEIGHT * 0.7;
+
 type BetType = 'moneyline' | 'spread' | 'ou' | 'parlay' | 'prop' | 'other';
 type OddsFormat = 'american' | 'decimal' | 'fractional';
 type BetStatus = 'pending' | 'won' | 'lost' | 'void';
+
+interface PlatformCategory {
+  category: string;
+  platforms: string[];
+}
+
+const PLATFORM_DATA: PlatformCategory[] = [
+  {
+    category: 'Classic DFS Platforms',
+    platforms: ['DraftKings', 'FanDuel', 'Yahoo Fantasy / DFS', 'OwnersBox'],
+  },
+  {
+    category: "Pick'em / Player Prop DFS",
+    platforms: [
+      'PrizePicks',
+      'Underdog Fantasy',
+      'Sleeper Picks',
+      'DraftKings Pick6',
+      'FanDuel Fantasy',
+      'Betr Picks',
+      'Boom Fantasy',
+      'ParlayPlay',
+      'Dabble',
+      'Bleacher Nation Fantasy',
+      'Playsqor',
+      'Thrillzz',
+      'Rebet',
+    ],
+  },
+  {
+    category: 'Season-Long Fantasy',
+    platforms: ['ESPN Fantasy', 'Yahoo Fantasy', 'Sleeper', 'NFL Fantasy', 'CBS Sports Fantasy'],
+  },
+  {
+    category: 'Other',
+    platforms: ['Other'],
+  },
+];
+
+type ListItem =
+  | { type: 'category'; category: string }
+  | { type: 'platform'; name: string };
+
+function buildListItems(data: PlatformCategory[]): ListItem[] {
+  const items: ListItem[] = [];
+  for (const group of data) {
+    items.push({ type: 'category', category: group.category });
+    for (const p of group.platforms) {
+      items.push({ type: 'platform', name: p });
+    }
+  }
+  return items;
+}
+
+function filterPlatforms(data: PlatformCategory[], query: string): ListItem[] {
+  const q = query.toLowerCase().trim();
+  if (!q) return buildListItems(data);
+
+  const items: ListItem[] = [];
+  for (const group of data) {
+    const matched = group.platforms.filter((p) =>
+      p.toLowerCase().includes(q)
+    );
+    if (matched.length > 0) {
+      items.push({ type: 'category', category: group.category });
+      for (const p of matched) {
+        items.push({ type: 'platform', name: p });
+      }
+    }
+  }
+  return items;
+}
 
 export default function ManualAddBetScreen() {
   const router = useRouter();
@@ -18,6 +107,97 @@ export default function ManualAddBetScreen() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [wager, setWager] = useState('');
   const [payout, setPayout] = useState('');
+
+  // Sportsbook state
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
+  const [isOtherMode, setIsOtherMode] = useState(false);
+  const [customPlatform, setCustomPlatform] = useState('');
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Animation
+  const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const overlayAnim = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => gestureState.dy > 5,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          slideAnim.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+          closeSheet();
+        } else {
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 80,
+            friction: 12,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  const openSheet = () => {
+    setSearchQuery('');
+    setSheetVisible(true);
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(overlayAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeSheet = () => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: SHEET_HEIGHT,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(overlayAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setSheetVisible(false);
+      setSearchQuery('');
+    });
+  };
+
+  const handleSelectPlatform = (name: string) => {
+    if (name === 'Other') {
+      setSelectedPlatform(null);
+      setIsOtherMode(true);
+      setCustomPlatform('');
+    } else {
+      setSelectedPlatform(name);
+      setIsOtherMode(false);
+      setCustomPlatform('');
+    }
+    closeSheet();
+  };
+
+  const handleClearCustom = () => {
+    setIsOtherMode(false);
+    setCustomPlatform('');
+    setSelectedPlatform(null);
+  };
+
+  const filteredItems = filterPlatforms(PLATFORM_DATA, searchQuery);
 
   const getOddsPlaceholder = () => {
     switch (oddsFormat) {
@@ -34,15 +214,49 @@ export default function ManualAddBetScreen() {
 
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) {
-      setSelectedTags(selectedTags.filter(t => t !== tag));
+      setSelectedTags(selectedTags.filter((t) => t !== tag));
     } else {
       setSelectedTags([...selectedTags, tag]);
     }
   };
 
   const handleSaveBet = () => {
-    // For now, just navigate back
     router.back();
+  };
+
+  const displayPlatformValue = isOtherMode
+    ? customPlatform
+    : selectedPlatform || '';
+
+  const renderSheetItem = ({ item }: { item: ListItem }) => {
+    if (item.type === 'category') {
+      return (
+        <View style={sheetStyles.categoryHeader}>
+          <Text style={sheetStyles.categoryText}>{item.category}</Text>
+        </View>
+      );
+    }
+
+    const isSelected = !isOtherMode && selectedPlatform === item.name;
+    const isOtherSelected = isOtherMode && item.name === 'Other';
+
+    return (
+      <TouchableOpacity
+        style={sheetStyles.platformRow}
+        onPress={() => handleSelectPlatform(item.name)}
+        activeOpacity={0.6}
+      >
+        <Text style={sheetStyles.platformName}>{item.name}</Text>
+        {(isSelected || isOtherSelected) && (
+          <Ionicons name="checkmark" size={18} color="#2DC672" />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const getItemKey = (item: ListItem, index: number) => {
+    if (item.type === 'category') return `cat-${item.category}`;
+    return `plat-${item.name}-${index}`;
   };
 
   return (
@@ -57,69 +271,57 @@ export default function ManualAddBetScreen() {
         {/* Field 1 - Sportsbook */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>Where did you place this bet?</Text>
-          <TouchableOpacity style={styles.dropdownInput} activeOpacity={0.7}>
-            <Ionicons name="chevron-down" size={18} color="#9B9B9B" style={styles.dropdownIcon} />
-          </TouchableOpacity>
+          {isOtherMode ? (
+            <View style={styles.customInputContainer}>
+              <TextInput
+                style={styles.customInput}
+                placeholder="Type platform name..."
+                placeholderTextColor="#9B9B9B"
+                value={customPlatform}
+                onChangeText={setCustomPlatform}
+                autoFocus
+              />
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={handleClearCustom}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={14} color="#9B9B9B" />
+                <Text style={styles.clearText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.dropdownInput} onPress={openSheet} activeOpacity={0.7}>
+              <Text
+                style={[
+                  styles.dropdownValueText,
+                  !selectedPlatform && styles.dropdownPlaceholderText,
+                ]}
+              >
+                {selectedPlatform || 'Select a platform...'}
+              </Text>
+              <Ionicons name="chevron-down" size={18} color="#9B9B9B" style={styles.dropdownIcon} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Field 2 - Bet Type */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>What type of bet?</Text>
           <View style={styles.pillsContainer}>
-            <TouchableOpacity
-              style={[styles.pill, betType === 'moneyline' && styles.pillActive]}
-              onPress={() => setBetType('moneyline')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.pillText, betType === 'moneyline' && styles.pillTextActive]}>
-                Moneyline
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pill, betType === 'spread' && styles.pillActive]}
-              onPress={() => setBetType('spread')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.pillText, betType === 'spread' && styles.pillTextActive]}>
-                Spread
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pill, betType === 'ou' && styles.pillActive]}
-              onPress={() => setBetType('ou')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.pillText, betType === 'ou' && styles.pillTextActive]}>
-                O/U
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pill, betType === 'parlay' && styles.pillActive]}
-              onPress={() => setBetType('parlay')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.pillText, betType === 'parlay' && styles.pillTextActive]}>
-                Parlay
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pill, betType === 'prop' && styles.pillActive]}
-              onPress={() => setBetType('prop')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.pillText, betType === 'prop' && styles.pillTextActive]}>
-                Prop
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pill, betType === 'other' && styles.pillActive]}
-              onPress={() => setBetType('other')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.pillText, betType === 'other' && styles.pillTextActive]}>
-                Other
-              </Text>
-            </TouchableOpacity>
+            {(['moneyline', 'spread', 'ou', 'parlay', 'prop', 'other'] as BetType[]).map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[styles.pill, betType === type && styles.pillActive]}
+                onPress={() => setBetType(type)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.pillText, betType === type && styles.pillTextActive]}>
+                  {type === 'ou' ? 'O/U' : type === 'moneyline' ? 'Moneyline' : type === 'spread' ? 'Spread' : type === 'parlay' ? 'Parlay' : type === 'prop' ? 'Prop' : 'Other'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
@@ -158,33 +360,18 @@ export default function ManualAddBetScreen() {
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>Odds</Text>
           <View style={styles.oddsFormatContainer}>
-            <TouchableOpacity
-              style={[styles.oddsFormatPill, oddsFormat === 'american' && styles.oddsFormatPillActive]}
-              onPress={() => setOddsFormat('american')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.oddsFormatText, oddsFormat === 'american' && styles.oddsFormatTextActive]}>
-                American
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.oddsFormatPill, oddsFormat === 'decimal' && styles.oddsFormatPillActive]}
-              onPress={() => setOddsFormat('decimal')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.oddsFormatText, oddsFormat === 'decimal' && styles.oddsFormatTextActive]}>
-                Decimal
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.oddsFormatPill, oddsFormat === 'fractional' && styles.oddsFormatPillActive]}
-              onPress={() => setOddsFormat('fractional')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.oddsFormatText, oddsFormat === 'fractional' && styles.oddsFormatTextActive]}>
-                Fractional
-              </Text>
-            </TouchableOpacity>
+            {(['american', 'decimal', 'fractional'] as OddsFormat[]).map((fmt) => (
+              <TouchableOpacity
+                key={fmt}
+                style={[styles.oddsFormatPill, oddsFormat === fmt && styles.oddsFormatPillActive]}
+                onPress={() => setOddsFormat(fmt)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.oddsFormatText, oddsFormat === fmt && styles.oddsFormatTextActive]}>
+                  {fmt.charAt(0).toUpperCase() + fmt.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
           <TextInput
             style={styles.textInput}
@@ -329,9 +516,154 @@ export default function ManualAddBetScreen() {
           <Text style={styles.submitButtonText}>Save Bet</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Bottom Sheet Modal */}
+      <Modal visible={sheetVisible} transparent animationType="none" onRequestClose={closeSheet}>
+        <View style={sheetStyles.modalContainer}>
+          <TouchableWithoutFeedback onPress={closeSheet}>
+            <Animated.View style={[sheetStyles.overlay, { opacity: overlayAnim }]} />
+          </TouchableWithoutFeedback>
+          <Animated.View
+            style={[
+              sheetStyles.sheet,
+              { transform: [{ translateY: slideAnim }] },
+            ]}
+          >
+            {/* Drag Handle */}
+            <View style={sheetStyles.handleArea} {...panResponder.panHandlers}>
+              <View style={sheetStyles.handle} />
+            </View>
+
+            {/* Search Bar */}
+            <View style={sheetStyles.searchContainer}>
+              <Ionicons name="search" size={18} color="#9B9B9B" style={sheetStyles.searchIcon} />
+              <TextInput
+                style={sheetStyles.searchInput}
+                placeholder="Search platforms..."
+                placeholderTextColor="#9B9B9B"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={18} color="#C0C0C0" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Platform List */}
+            <FlatList
+              data={filteredItems}
+              renderItem={renderSheetItem}
+              keyExtractor={getItemKey}
+              contentContainerStyle={sheetStyles.listContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={sheetStyles.emptyContainer}>
+                  <Text style={sheetStyles.emptyText}>No platforms found</Text>
+                </View>
+              }
+            />
+          </Animated.View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const sheetStyles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#00000066',
+  },
+  sheet: {
+    height: SHEET_HEIGHT,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  handleArea: {
+    paddingTop: 12,
+    paddingBottom: 8,
+    alignItems: 'center',
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D0D0D0',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 10,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1A1A1A',
+    height: 44,
+  },
+  listContent: {
+    paddingBottom: 40,
+  },
+  categoryHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 8,
+  },
+  categoryText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#999999',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  platformRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingLeft: 16,
+    height: 50,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    marginHorizontal: 0,
+  },
+  platformName: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: '#1A1A1A',
+    flex: 1,
+  },
+  emptyContainer: {
+    paddingTop: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 15,
+    color: '#9B9B9B',
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -410,13 +742,51 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     height: 50,
     justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dropdownValueText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#1A1A1A',
+  },
+  dropdownPlaceholderText: {
+    color: '#9B9B9B',
   },
   dropdownIcon: {
-    position: 'absolute',
-    right: 16,
+    marginLeft: 8,
   },
   dateInputPlaceholder: {
     flex: 1,
+  },
+
+  // Custom platform input (Other mode)
+  customInputContainer: {
+    backgroundColor: '#F0F0F0',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  customInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#1A1A1A',
+    height: 50,
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingLeft: 8,
+  },
+  clearText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#9B9B9B',
   },
 
   // Pills (Bet Type)
