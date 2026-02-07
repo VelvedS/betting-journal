@@ -17,11 +17,15 @@ import {
   Platform,
   UIManager,
   Image,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -142,6 +146,48 @@ function useBottomSheet() {
   return { visible, slideAnim, overlayAnim, panResponder, openSheet, closeSheet };
 }
 
+// ── Status Pill Component ──
+
+function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: boolean; onPress: () => void }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, { toValue: 0.93, useNativeDriver: true, tension: 300, friction: 10 }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 300, friction: 10 }).start();
+  };
+
+  const getStyles = () => {
+    if (!selected) return { bg: '#F0F0F0', text: '#1A1A1A', border: '#F0F0F0', bw: 0 };
+    switch (value) {
+      case 'pending': return { bg: 'transparent', text: '#2DC672', border: '#2DC672', bw: 1 };
+      case 'won': return { bg: '#2DC672', text: '#FFFFFF', border: '#2DC672', bw: 0 };
+      case 'lost': return { bg: '#E85D5D', text: '#FFFFFF', border: '#E85D5D', bw: 0 };
+      case 'void': return { bg: '#999999', text: '#FFFFFF', border: '#999999', bw: 0 };
+    }
+  };
+
+  const s = getStyles();
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[styles.statusPill, { backgroundColor: s.bg, borderColor: s.border, borderWidth: s.bw }]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.statusPillText, { color: s.text }]}>
+          {value.charAt(0).toUpperCase() + value.slice(1)}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 // ── Main Component ──
 
 export default function ManualAddBetScreen() {
@@ -154,6 +200,8 @@ export default function ManualAddBetScreen() {
   }>();
 
   const hasRouteParams = Object.keys(params).length > 0;
+  const { user } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form state
   const [betType, setBetType] = useState<BetType>(() => {
@@ -284,7 +332,63 @@ export default function ManualAddBetScreen() {
     switch (oddsFormat) { case 'american': return '+150 or -110'; case 'decimal': return '2.50'; case 'fractional': return '3/2'; default: return '+150 or -110'; }
   };
   const toggleTag = (tag: string) => { setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]); };
-  const handleSaveBet = () => { router.back(); };
+  const handleSaveBet = async () => {
+    const finalStatus = status || 'pending';
+    const sportsbook = isPlatformOther ? customPlatform : selectedPlatform;
+    const sportValue = isSportOther ? customSport : selectedSport;
+
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to save a bet.');
+      return;
+    }
+
+    setIsSaving(true);
+
+    const betTypeMap: Record<BetType, string> = {
+      moneyline: 'moneyline', spread: 'spread', ou: 'over_under',
+      parlay: 'parlay', prop: 'prop', other: 'other',
+    };
+
+    const wagerNum = parseFloat(wager) || 0;
+    const payoutNum = computedPayout;
+    const roiPercentage = wagerNum > 0 ? ((payoutNum - wagerNum) / wagerNum) * 100 : 0;
+
+    const payload = {
+      user_id: user.id,
+      sportsbook: sportsbook || null,
+      bet_type: betTypeMap[betType],
+      sport: sportValue || null,
+      matchup: matchup || null,
+      description: description || null,
+      odds: odds || null,
+      odds_format: oddsFormat,
+      wager: wagerNum,
+      potential_payout: payoutNum,
+      roi_percentage: roiPercentage,
+      status: finalStatus,
+      notes: notes || null,
+      ticket_image_url: ticketImageUrl || null,
+      placed_at: placedAt ? placedAt.toISOString() : new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      const { data, error } = await supabase.from('bets').insert(payload).select().single();
+      if (error) throw error;
+
+      if (selectedTags.length > 0 && data?.id) {
+        await supabase.from('bet_tags').insert(selectedTags.map(tag => ({ bet_id: data.id, tag })));
+      }
+
+      setIsSaving(false);
+      router.back();
+    } catch (err: any) {
+      console.error('Failed to save bet:', err);
+      setIsSaving(false);
+      Alert.alert('Error', 'Failed to save bet. Please try again.');
+    }
+  };
 
   // Platform sheet renderer
   const renderPlatformItem = ({ item }: { item: PlatformListItem }) => {
@@ -470,9 +574,7 @@ export default function ManualAddBetScreen() {
           <Text style={styles.fieldLabel}>Status</Text>
           <View style={styles.statusContainer}>
             {(['pending', 'won', 'lost', 'void'] as BetStatus[]).map((s) => (
-              <TouchableOpacity key={s} style={[styles.statusPill, status === s && (s === 'pending' ? styles.statusPillPending : styles.statusPillActive)]} onPress={() => setStatus(s)} activeOpacity={0.7}>
-                <Text style={[styles.statusPillText, status === s && (s === 'pending' ? styles.statusPillTextPending : styles.statusPillTextActive)]}>{s.charAt(0).toUpperCase() + s.slice(1)}</Text>
-              </TouchableOpacity>
+              <StatusPill key={s} value={s} selected={status === s} onPress={() => setStatus(s)} />
             ))}
           </View>
         </View>
@@ -599,8 +701,12 @@ export default function ManualAddBetScreen() {
         </View>
 
         {/* Submit Button */}
-        <TouchableOpacity style={styles.submitButton} onPress={handleSaveBet} activeOpacity={0.8}>
-          <Text style={styles.submitButtonText}>Save Bet</Text>
+        <TouchableOpacity style={[styles.submitButton, isSaving && { opacity: 0.7 }]} onPress={handleSaveBet} activeOpacity={0.8} disabled={isSaving}>
+          {isSaving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.submitButtonText}>Save Bet</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
 
@@ -736,12 +842,8 @@ const styles = StyleSheet.create({
   currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', marginRight: 8 },
   currencyInput: { flex: 1, fontSize: 14, fontWeight: '400', color: '#1A1A1A' },
   statusContainer: { flexDirection: 'row', gap: 10 },
-  statusPill: { backgroundColor: '#F0F0F0', borderRadius: 9, paddingHorizontal: 16, paddingVertical: 10, height: 38, justifyContent: 'center' },
-  statusPillPending: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#10B981' },
-  statusPillActive: { backgroundColor: '#F0F0F0' },
-  statusPillText: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
-  statusPillTextPending: { color: '#10B981' },
-  statusPillTextActive: { color: '#1A1A1A' },
+  statusPill: { borderRadius: 9, paddingHorizontal: 16, paddingVertical: 10, height: 38, justifyContent: 'center' },
+  statusPillText: { fontSize: 14, fontWeight: '600' },
   uploadArea: { backgroundColor: '#F8F8F8', borderRadius: 10, borderWidth: 1, borderColor: '#E0E0E0', borderStyle: 'dashed', paddingVertical: 30, alignItems: 'center', justifyContent: 'center', height: 130, marginBottom: 12 },
   uploadTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', marginTop: 10 },
   uploadHint: { fontSize: 12, fontWeight: '400', color: '#9B9B9B', marginTop: 4 },
