@@ -95,7 +95,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           {/* Preferences */}
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/preferences')}>
             <View style={styles.menuIconCircle}>
               <Ionicons name="settings-outline" size={22} color="#6B6B6B" />
             </View>
