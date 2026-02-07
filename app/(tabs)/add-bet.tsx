@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 type ScreenState = 'default' | 'processing' | 'success';
 
 export default function AddBetScreen() {
+  const router = useRouter();
   const [screen, setScreen] = useState<ScreenState>('default');
   const [visibleSteps, setVisibleSteps] = useState<number>(0);
 
