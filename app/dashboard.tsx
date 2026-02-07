@@ -77,10 +77,6 @@ export default function DashboardScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Weekly');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
-  const handleLogout = () => {
-    router.replace('/');
-  };
-
   const handleDismissTooltip = () => {
     setSelectedDay(null);
   };
@@ -204,10 +200,6 @@ export default function DashboardScreen() {
           ))}
         </View>
 
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -306,7 +298,7 @@ function PerformanceChart({ selectedDay, setSelectedDay }: PerformanceChartProps
               fontSize="11"
               fill="#9CA3AF"
               textAnchor="middle"
-              fontWeight="500"
+              fontWeight="400"
             >
               {data.day}
             </SvgText>
@@ -318,9 +310,10 @@ function PerformanceChart({ selectedDay, setSelectedDay }: PerformanceChartProps
               key={`yaxis-${i}`}
               x={padding - 10}
               y={padding + (4 - i) * (effectiveHeight / 4) + 4}
-              fontSize="10"
+              fontSize="11"
               fill="#9CA3AF"
               textAnchor="end"
+              fontWeight="400"
             >
               ${Math.round(value).toLocaleString()}
             </SvgText>
@@ -366,7 +359,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   header: {
     marginBottom: 24,
@@ -605,20 +598,5 @@ const styles = StyleSheet.create({
   betId: {
     fontSize: 12,
     color: '#9CA3AF',
-  },
-  logoutButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    marginTop: 20,
-  },
-  logoutButtonText: {
-    color: '#6B6B6B',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
