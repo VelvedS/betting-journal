@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Dimensions,
   GestureResponderEvent,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -16,16 +17,61 @@ import Svg, { Path, Line, Circle, Text as SvgText } from 'react-native-svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Weekly performance data
-const weeklyData = [
-  { day: 'Mon', profit: 120 },
-  { day: 'Tue', profit: 85 },
-  { day: 'Wed', profit: 50 },
-  { day: 'Thu', profit: 280 },
-  { day: 'Fri', profit: 620 },
-  { day: 'Sat', profit: 895 },
-  { day: 'Sun', profit: 1400 },
+// --- Chart data per time period ---
+
+interface ChartDataPoint {
+  label: string;
+  profit: number;
+}
+
+const dailyData: ChartDataPoint[] = [
+  { label: '12am', profit: 0 },
+  { label: '3am', profit: 15 },
+  { label: '6am', profit: -10 },
+  { label: '9am', profit: 45 },
+  { label: '12pm', profit: 120 },
+  { label: '3pm', profit: 95 },
+  { label: '6pm', profit: 210 },
+  { label: '9pm', profit: 280 },
 ];
+
+const weeklyData: ChartDataPoint[] = [
+  { label: 'Mon', profit: 120 },
+  { label: 'Wed', profit: -45 },
+  { label: 'Thu', profit: 280 },
+  { label: 'Fri', profit: 620 },
+  { label: 'Sat', profit: 895 },
+  { label: 'Sun', profit: 1400 },
+];
+
+const monthlyData: ChartDataPoint[] = [
+  { label: 'W1', profit: 320 },
+  { label: 'W2', profit: 580 },
+  { label: 'W3', profit: 410 },
+  { label: 'W4', profit: 1150 },
+];
+
+const yearlyData: ChartDataPoint[] = [
+  { label: 'Jan', profit: 450 },
+  { label: 'Feb', profit: -120 },
+  { label: 'Mar', profit: 680 },
+  { label: 'Apr', profit: 320 },
+  { label: 'May', profit: 890 },
+  { label: 'Jun', profit: 540 },
+  { label: 'Jul', profit: -200 },
+  { label: 'Aug', profit: 750 },
+  { label: 'Sep', profit: 1100 },
+  { label: 'Oct', profit: 960 },
+  { label: 'Nov', profit: 1350 },
+  { label: 'Dec', profit: 2450 },
+];
+
+const chartDataMap: Record<TimePeriod, ChartDataPoint[]> = {
+  Daily: dailyData,
+  Weekly: weeklyData,
+  Monthly: monthlyData,
+  Yearly: yearlyData,
+};
 
 // Sample bet data
 const sampleBets = [
@@ -75,10 +121,10 @@ type TimePeriod = 'Daily' | 'Weekly' | 'Monthly' | 'Yearly';
 export default function DashboardScreen() {
   const router = useRouter();
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Weekly');
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<string | null>(null);
 
   const handleDismissTooltip = () => {
-    setSelectedDay(null);
+    setHoveredPoint(null);
   };
 
   return (
@@ -115,7 +161,10 @@ export default function DashboardScreen() {
                 styles.tab,
                 selectedPeriod === period && styles.tabActive,
               ]}
-              onPress={() => setSelectedPeriod(period)}
+              onPress={() => {
+                setSelectedPeriod(period);
+                setHoveredPoint(null);
+              }}
             >
               <Text
                 style={[
@@ -136,7 +185,12 @@ export default function DashboardScreen() {
           onPress={handleDismissTooltip}
         >
           <Text style={styles.chartLabel}>PERFORMANCE CURVE</Text>
-          <PerformanceChart selectedDay={selectedDay} setSelectedDay={setSelectedDay} />
+          <PerformanceChart
+            data={chartDataMap[selectedPeriod]}
+            hoveredPoint={hoveredPoint}
+            setHoveredPoint={setHoveredPoint}
+            period={selectedPeriod}
+          />
         </TouchableOpacity>
 
         {/* Recent Activity Section */}
@@ -205,149 +259,193 @@ export default function DashboardScreen() {
   );
 }
 
-// Performance Chart Component
+// --- Performance Chart Component ---
+
 interface PerformanceChartProps {
-  selectedDay: string | null;
-  setSelectedDay: (day: string | null) => void;
+  data: ChartDataPoint[];
+  hoveredPoint: string | null;
+  setHoveredPoint: (label: string | null) => void;
+  period: TimePeriod;
 }
 
-function PerformanceChart({ selectedDay, setSelectedDay }: PerformanceChartProps) {
+function PerformanceChart({ data, hoveredPoint, setHoveredPoint, period }: PerformanceChartProps) {
   const chartWidth = SCREEN_WIDTH - 80;
   const chartHeight = 220;
-  const padding = 40;
-  const effectiveWidth = chartWidth - padding * 2;
-  const effectiveHeight = chartHeight - padding * 2 - 20;
+  const paddingLeft = 45;
+  const paddingRight = 15;
+  const paddingTop = 20;
+  const paddingBottom = 30;
+  const effectiveWidth = chartWidth - paddingLeft - paddingRight;
+  const effectiveHeight = chartHeight - paddingTop - paddingBottom;
 
-  // Calculate max profit for Y-axis scaling
-  const maxProfit = Math.max(...weeklyData.map(d => d.profit));
-  const yAxisMax = Math.ceil(maxProfit / 350) * 350; // Round to nearest 350
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  // Convert data points to chart coordinates
-  const points = weeklyData.map((data, index) => {
-    const x = padding + (index / 6) * effectiveWidth;
-    const y = padding + effectiveHeight - (data.profit / yAxisMax) * effectiveHeight;
-    return { x, y, ...data };
+  useEffect(() => {
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [period]);
+
+  // Dynamic Y-axis range
+  const profits = data.map(d => d.profit);
+  const rawMin = Math.min(...profits);
+  const rawMax = Math.max(...profits);
+  const range = rawMax - rawMin || 1;
+  const yMin = Math.min(0, Math.floor(rawMin - range * 0.1));
+  const yMax = Math.ceil(rawMax + range * 0.2);
+
+  // Round to nice increments
+  const yRange = yMax - yMin;
+  const step = Math.ceil(yRange / 4 / 50) * 50 || 50;
+  const niceMin = Math.floor(yMin / step) * step;
+  const niceMax = niceMin + step * 4;
+
+  // Y-axis labels (5 labels)
+  const yLabels: number[] = [];
+  for (let i = 0; i <= 4; i++) {
+    yLabels.push(niceMin + i * step);
+  }
+
+  // Map data to pixel coordinates
+  const points = data.map((d, index) => {
+    const x = paddingLeft + (data.length > 1 ? (index / (data.length - 1)) * effectiveWidth : effectiveWidth / 2);
+    const y = paddingTop + effectiveHeight - ((d.profit - niceMin) / (niceMax - niceMin)) * effectiveHeight;
+    return { x, y, ...d };
   });
 
-  // Create smooth curve path
-  let pathD = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1];
-    const curr = points[i];
-    const cpx = (prev.x + curr.x) / 2;
-    pathD += ` Q ${cpx} ${prev.y}, ${curr.x} ${curr.y}`;
+  // Smooth curve path using quadratic bezier
+  let pathD = '';
+  if (points.length > 0) {
+    pathD = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const cpx = (prev.x + curr.x) / 2;
+      pathD += ` Q ${cpx} ${prev.y}, ${curr.x} ${curr.y}`;
+    }
   }
 
-  // Generate Y-axis labels with dollar amounts
-  const yAxisLabels = [];
-  for (let i = 0; i <= 4; i++) {
-    yAxisLabels.push((i * yAxisMax) / 4);
-  }
-
-  const handleDotPress = (day: string, e: GestureResponderEvent) => {
+  const handleDotPress = (label: string, e: GestureResponderEvent) => {
     e.stopPropagation();
-    setSelectedDay(selectedDay === day ? null : day);
+    setHoveredPoint(hoveredPoint === label ? null : label);
   };
 
-  const getSelectedDayData = () => {
-    if (!selectedDay) return null;
-    return weeklyData.find(d => d.day === selectedDay);
+  const formatDollar = (val: number) => {
+    if (val >= 1000) return `$${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+    if (val <= -1000) return `-$${(Math.abs(val) / 1000).toFixed(Math.abs(val) % 1000 === 0 ? 0 : 1)}k`;
+    if (val < 0) return `-$${Math.abs(val)}`;
+    return `$${val}`;
   };
-
-  const selectedData = getSelectedDayData();
 
   return (
-    <View style={styles.chartWrapper}>
+    <Animated.View style={[styles.chartWrapper, { opacity: fadeAnim }]}>
       <View style={styles.chartContainer}>
         <Svg width={chartWidth} height={chartHeight}>
-          {/* Y-axis reference lines */}
-          {[0, 1, 2, 3, 4].map((i) => (
-            <Line
-              key={`line-${i}`}
-              x1={padding}
-              y1={padding + (i * effectiveHeight) / 4}
-              x2={chartWidth - padding}
-              y2={padding + (i * effectiveHeight) / 4}
-              stroke="#F5F5F5"
-              strokeWidth="1"
-            />
-          ))}
+          {/* Y-axis horizontal grid lines */}
+          {yLabels.map((val, i) => {
+            const y = paddingTop + effectiveHeight - ((val - niceMin) / (niceMax - niceMin)) * effectiveHeight;
+            return (
+              <Line
+                key={`grid-${i}`}
+                x1={paddingLeft}
+                y1={y}
+                x2={chartWidth - paddingRight}
+                y2={y}
+                stroke="#F0F0F0"
+                strokeWidth="1"
+              />
+            );
+          })}
 
           {/* Performance curve */}
           <Path d={pathD} stroke="#6366F1" strokeWidth="3" fill="none" />
 
-          {/* Data points as circles in SVG */}
-          {points.map((point, index) => (
-            <Circle
-              key={`circle-${index}`}
-              cx={point.x}
-              cy={point.y}
-              r={selectedDay === point.day ? 7 : 5}
-              fill="#6366F1"
-              stroke="#FFFFFF"
-              strokeWidth={selectedDay === point.day ? 4 : 3}
-            />
-          ))}
+          {/* Hovered dot only */}
+          {points.map((point, index) =>
+            hoveredPoint === point.label ? (
+              <Circle
+                key={`hovered-${index}`}
+                cx={point.x}
+                cy={point.y}
+                r={8}
+                fill="#6366F1"
+                stroke="#FFFFFF"
+                strokeWidth={3}
+              />
+            ) : null
+          )}
 
-          {/* X-axis labels */}
-          {weeklyData.map((data, index) => (
+          {/* Y-axis labels */}
+          {yLabels.map((val, i) => {
+            const y = paddingTop + effectiveHeight - ((val - niceMin) / (niceMax - niceMin)) * effectiveHeight;
+            return (
+              <SvgText
+                key={`yaxis-${i}`}
+                x={paddingLeft - 8}
+                y={y + 4}
+                fontSize="11"
+                fill="#9CA3AF"
+                textAnchor="end"
+                fontWeight="400"
+              >
+                {formatDollar(val)}
+              </SvgText>
+            );
+          })}
+
+          {/* X-axis labels — dynamic per data point */}
+          {points.map((point, index) => (
             <SvgText
-              key={`day-${index}`}
-              x={padding + (index / 6) * effectiveWidth}
-              y={chartHeight - 8}
+              key={`xaxis-${index}`}
+              x={point.x}
+              y={chartHeight - 6}
               fontSize="11"
               fill="#9CA3AF"
               textAnchor="middle"
               fontWeight="400"
             >
-              {data.day}
-            </SvgText>
-          ))}
-
-          {/* Y-axis labels with dollar amounts */}
-          {yAxisLabels.map((value, i) => (
-            <SvgText
-              key={`yaxis-${i}`}
-              x={padding - 10}
-              y={padding + (4 - i) * (effectiveHeight / 4) + 4}
-              fontSize="11"
-              fill="#9CA3AF"
-              textAnchor="end"
-              fontWeight="400"
-            >
-              ${Math.round(value).toLocaleString()}
+              {point.label}
             </SvgText>
           ))}
         </Svg>
 
-        {/* Interactive Dots with Tooltips */}
-        {points.map((point, index) => (
-          <TouchableOpacity
-            key={`dot-${index}`}
-            style={[
-              styles.dotTouchable,
-              {
-                left: point.x - 15,
-                top: point.y - 15,
-                transform: [{ scale: selectedDay === point.day ? 1.2 : 1 }],
-              },
-            ]}
-            onPress={(e) => handleDotPress(point.day, e)}
-            activeOpacity={0.8}
-          >
-            {/* Tooltip */}
-            {selectedDay === point.day && (
-              <View style={styles.tooltip}>
-                <Text style={styles.tooltipText}>
-                  {point.day}: +${point.profit}
-                </Text>
-                <View style={styles.tooltipArrow} />
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
+        {/* Invisible touch targets + tooltips */}
+        {points.map((point, index) => {
+          const isPositive = point.profit >= 0;
+          const profitColor = isPositive ? '#10B981' : '#DC2626';
+          const profitText = isPositive ? `+$${point.profit}` : `-$${Math.abs(point.profit)}`;
+
+          return (
+            <TouchableOpacity
+              key={`touch-${index}`}
+              style={[
+                styles.dotTouchable,
+                {
+                  left: point.x - 18,
+                  top: point.y - 18,
+                },
+              ]}
+              onPress={(e) => handleDotPress(point.label, e)}
+              activeOpacity={0.8}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              {hoveredPoint === point.label && (
+                <View style={styles.tooltip}>
+                  <Text style={styles.tooltipLabel}>{point.label}</Text>
+                  <Text style={[styles.tooltipValue, { color: profitColor }]}>
+                    {profitText}
+                  </Text>
+                  <View style={styles.tooltipArrow} />
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -462,26 +560,31 @@ const styles = StyleSheet.create({
   },
   dotTouchable: {
     position: 'absolute',
-    width: 30,
-    height: 30,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
   tooltip: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 44,
     backgroundColor: '#1A1A1A',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     zIndex: 10,
-    minWidth: 100,
+    minWidth: 90,
     alignItems: 'center',
   },
-  tooltipText: {
+  tooltipLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#9CA3AF',
+    marginBottom: 2,
+  },
+  tooltipValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
   tooltipArrow: {
     position: 'absolute',
