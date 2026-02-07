@@ -243,7 +243,7 @@ export default function AddBetScreen() {
         </View>
 
         {/* Card 3 - Manually Add Your Bet */}
-        <TouchableOpacity style={styles.compactCard} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.compactCard} activeOpacity={0.7} onPress={() => router.push('/manual-add-bet')}>
           <View style={styles.compactIconCircle}>
             <Ionicons name="add-outline" size={28} color="#6B6B6B" />
           </View>
