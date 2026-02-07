@@ -173,14 +173,22 @@ export default function StatsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Betting Statistics</Text>
-            <Text style={styles.subtitle}>{totalBets} Total Bets</Text>
-          </View>
-          <TouchableOpacity style={styles.filterIconButton}>
-            <Ionicons name="funnel-outline" size={22} color="#1A1A1A" />
+        <View style={styles.headerContainer}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
           </TouchableOpacity>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>Betting Statistics</Text>
+              <Text style={styles.subtitle}>{totalBets} Total Bets</Text>
+            </View>
+            <TouchableOpacity style={styles.filterIconButton}>
+              <Ionicons name="funnel-outline" size={22} color="#1A1A1A" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Summary Cards - Row 1 */}
@@ -381,11 +389,27 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
   },
+  headerContainer: {
+    marginBottom: 24,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 16,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 24,
   },
   title: {
     fontSize: 28,
