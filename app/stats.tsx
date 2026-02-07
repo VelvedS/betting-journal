@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -138,32 +139,71 @@ export default function StatsScreen() {
   const router = useRouter();
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All');
 
-  // Calculate statistics
-  const wins = allBets.filter(bet => bet.status === 'WIN').length;
-  const losses = allBets.filter(bet => bet.status === 'LOSS').length;
-  const pending = allBets.filter(bet => bet.status === 'PENDING').length;
-  const totalBets = allBets.length;
+  // Fade animation for stats
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const totalWagered = allBets.reduce((sum, bet) => sum + bet.wager, 0);
-  const totalWon = allBets
-    .filter(bet => bet.status === 'WIN')
-    .reduce((sum, bet) => sum + (bet.potential - bet.wager), 0);
-  const totalLost = allBets
-    .filter(bet => bet.status === 'LOSS')
-    .reduce((sum, bet) => sum + bet.wager, 0);
-  const netPL = totalWon - totalLost;
-  const winRate = ((wins / totalBets) * 100).toFixed(1);
-  const roi = ((netPL / totalWagered) * 100).toFixed(1);
+  useEffect(() => {
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [selectedFilter]);
 
-  // Filter bets
-  const filteredBets = selectedFilter === 'All' 
-    ? allBets 
+  // Global counts for filter tab labels (always show totals)
+  const totalWins = allBets.filter(bet => bet.status === 'WIN').length;
+  const totalLosses = allBets.filter(bet => bet.status === 'LOSS').length;
+  const totalPending = allBets.filter(bet => bet.status === 'PENDING').length;
+  const totalAllBets = allBets.length;
+
+  // Filter bets based on selected tab
+  const filteredBets = selectedFilter === 'All'
+    ? allBets
     : allBets.filter(bet => {
         if (selectedFilter === 'Wins') return bet.status === 'WIN';
         if (selectedFilter === 'Losses') return bet.status === 'LOSS';
         if (selectedFilter === 'Pending') return bet.status === 'PENDING';
         return true;
       });
+
+  // Calculate statistics from filtered bets
+  const filteredCount = filteredBets.length;
+  const wins = filteredBets.filter(bet => bet.status === 'WIN').length;
+  const losses = filteredBets.filter(bet => bet.status === 'LOSS').length;
+
+  const totalWagered = filteredBets.reduce((sum, bet) => sum + bet.wager, 0);
+  const totalWon = filteredBets
+    .filter(bet => bet.status === 'WIN')
+    .reduce((sum, bet) => sum + (bet.potential - bet.wager), 0);
+  const totalLost = filteredBets
+    .filter(bet => bet.status === 'LOSS')
+    .reduce((sum, bet) => sum + bet.wager, 0);
+  const netPL = totalWon - totalLost;
+  const winRate = filteredCount > 0 ? ((wins / filteredCount) * 100).toFixed(1) : '0.0';
+  const roi = totalWagered > 0 ? ((netPL / totalWagered) * 100).toFixed(1) : '0.0';
+
+  // Color helpers
+  const getValueColor = (value: number) => {
+    if (value > 0) return '#10B981';
+    if (value < 0) return '#EF4444';
+    return '#1A1A1A';
+  };
+
+  const formatNetPL = (value: number) => {
+    if (value > 0) return `+$${value}`;
+    if (value < 0) return `-$${Math.abs(value)}`;
+    return '$0';
+  };
+
+  const formatROI = (value: string) => {
+    const num = parseFloat(value);
+    if (num > 0) return `+${value}%`;
+    if (num < 0) return `${value}%`;
+    return '0.0%';
+  };
+
+  const subtitleText = filteredCount === 1 ? '1 Total Bet' : `${filteredCount} Total Bets`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -183,7 +223,7 @@ export default function StatsScreen() {
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>Betting Statistics</Text>
-              <Text style={styles.subtitle}>{totalBets} Total Bets</Text>
+              <Text style={styles.subtitle}>{subtitleText}</Text>
             </View>
             <TouchableOpacity style={styles.filterIconButton}>
               <Ionicons name="funnel-outline" size={22} color="#1A1A1A" />
@@ -192,7 +232,7 @@ export default function StatsScreen() {
         </View>
 
         {/* Summary Cards - Row 1 */}
-        <View style={styles.summaryRow}>
+        <Animated.View style={[styles.summaryRow, { opacity: fadeAnim }]}>
           {/* Wins Card */}
           <View style={styles.summaryCard}>
             <View style={styles.iconContainer}>
@@ -214,17 +254,17 @@ export default function StatsScreen() {
           {/* Net P/L Card */}
           <View style={styles.summaryCard}>
             <View style={styles.iconContainer}>
-              <Ionicons name="document-text-outline" size={20} color="#10B981" />
+              <Ionicons name="document-text-outline" size={20} color={getValueColor(netPL)} />
             </View>
             <Text style={styles.summaryLabel}>NET P/L</Text>
-            <Text style={[styles.summaryValue, { color: '#10B981' }]}>
-              +${netPL}
+            <Text style={[styles.summaryValue, { color: getValueColor(netPL) }]}>
+              {formatNetPL(netPL)}
             </Text>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Summary Cards - Row 2 */}
-        <View style={styles.summaryRow}>
+        <Animated.View style={[styles.summaryRow, { opacity: fadeAnim }]}>
           {/* Wagered Card */}
           <View style={styles.summaryCard}>
             <View style={styles.iconContainer}>
@@ -246,14 +286,14 @@ export default function StatsScreen() {
           {/* ROI Card */}
           <View style={styles.summaryCard}>
             <View style={styles.iconContainer}>
-              <Ionicons name="bar-chart-outline" size={20} color="#10B981" />
+              <Ionicons name="bar-chart-outline" size={20} color={getValueColor(parseFloat(roi))} />
             </View>
             <Text style={styles.summaryLabel}>ROI</Text>
-            <Text style={[styles.summaryValue, { color: '#10B981' }]}>
-              +{roi}%
+            <Text style={[styles.summaryValue, { color: getValueColor(parseFloat(roi)) }]}>
+              {formatROI(roi)}
             </Text>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Filter Tabs */}
         <ScrollView
@@ -274,7 +314,7 @@ export default function StatsScreen() {
                 selectedFilter === 'All' && styles.filterTabTextActive,
               ]}
             >
-              All {totalBets}
+              All {totalAllBets}
             </Text>
           </TouchableOpacity>
 
@@ -291,7 +331,7 @@ export default function StatsScreen() {
                 selectedFilter === 'Wins' && styles.filterTabTextActive,
               ]}
             >
-              Wins {wins}
+              Wins {totalWins}
             </Text>
           </TouchableOpacity>
 
@@ -308,7 +348,7 @@ export default function StatsScreen() {
                 selectedFilter === 'Losses' && styles.filterTabTextActive,
               ]}
             >
-              Losses {losses}
+              Losses {totalLosses}
             </Text>
           </TouchableOpacity>
 
@@ -325,7 +365,7 @@ export default function StatsScreen() {
                 selectedFilter === 'Pending' && styles.filterTabTextActive,
               ]}
             >
-              Pending {pending}
+              Pending {totalPending}
             </Text>
           </TouchableOpacity>
         </ScrollView>
