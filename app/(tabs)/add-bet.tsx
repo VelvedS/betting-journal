@@ -10,8 +10,12 @@ type ScreenState = 'default' | 'processing' | 'success' | 'error';
 
 export default function AddBetScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [screen, setScreen] = useState<ScreenState>('default');
   const [visibleSteps, setVisibleSteps] = useState<number>(0);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
+  const [extractedData, setExtractedData] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   // Animation values
   const spinValue = useRef(new Animated.Value(0)).current;
