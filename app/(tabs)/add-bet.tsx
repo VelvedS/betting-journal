@@ -303,6 +303,53 @@ export default function AddBetScreen() {
     );
   }
 
+  if (screen === 'error') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="dark" />
+        <View style={styles.fullScreenContainer}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Add Your Bet</Text>
+            <Text style={styles.subtitle}>Scan your betting slips to auto-log your trades</Text>
+          </View>
+
+          {/* Error Card - Centered */}
+          <View style={styles.centeredCardContainer}>
+            <View style={styles.errorCard}>
+              {/* Error Icon */}
+              <View style={styles.errorIconContainer}>
+                <Ionicons name="alert-circle" size={40} color="#E85D5D" />
+              </View>
+
+              <Text style={styles.errorTitle}>Couldn't Extract Bet Details</Text>
+              <Text style={styles.errorDescription}>{errorMessage}</Text>
+
+              {/* Buttons */}
+              <View style={styles.errorButtonsContainer}>
+                <TouchableOpacity
+                  style={styles.errorRetryButton}
+                  activeOpacity={0.7}
+                  onPress={handleRetryUpload}
+                >
+                  <Text style={styles.errorRetryButtonText}>Try Again</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.errorManualButton}
+                  activeOpacity={0.7}
+                  onPress={handleEnterManually}
+                >
+                  <Text style={styles.errorManualButtonText}>Enter Manually</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // Default Add Bet Screen
   return (
     <SafeAreaView style={styles.container}>
