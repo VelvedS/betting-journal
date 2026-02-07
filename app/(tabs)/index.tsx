@@ -172,17 +172,17 @@ export default function HomeScreen() {
             {hasBets ? (
               <>
                 <Text style={[styles.profitValue, { color: totalProfit >= 0 ? '#10B981' : '#EF4444' }]}>
-                  {totalProfit >= 0 ? `$+${Math.abs(totalProfit).toLocaleString()}` : `-$${Math.abs(totalProfit).toLocaleString()}`}
+                  {formatPL(totalProfit)}
                 </Text>
                 <View style={styles.percentageContainer}>
                   <Ionicons name={totalProfit >= 0 ? "trending-up" : "trending-down"} size={20} color={totalProfit >= 0 ? "#10B981" : "#EF4444"} />
                   <Text style={[styles.percentageText, { color: totalProfit >= 0 ? '#10B981' : '#EF4444' }]}>
-                    {totalWagered > 0 ? `${totalProfit >= 0 ? '+' : ''}${((totalProfit / totalWagered) * 100).toFixed(1)}%` : '0.0%'}
+                    {formatPercent(totalWagered > 0 ? (totalProfit / totalWagered) * 100 : 0, true)}
                   </Text>
                 </View>
               </>
             ) : (
-              <Text style={styles.profitValueEmpty}>$0.00</Text>
+              <Text style={styles.profitValueEmpty}>$0</Text>
             )}
           </View>
         </View>
