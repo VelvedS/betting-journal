@@ -145,7 +145,16 @@ export default function DashboardScreen() {
 
         {/* Recent Activity Section */}
         <View style={styles.activitySection}>
-          <Text style={styles.activityTitle}>Recent Activity</Text>
+          <View style={styles.activityTitleRow}>
+            <Text style={styles.activityTitle}>Recent Activity</Text>
+            <TouchableOpacity
+              style={styles.viewAllButton}
+              onPress={() => router.push('/stats')}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
+              <Ionicons name="arrow-forward" size={16} color="#6366F1" />
+            </TouchableOpacity>
+          </View>
 
           {sampleBets.map((bet) => (
             <View key={bet.id} style={styles.activityCard}>
