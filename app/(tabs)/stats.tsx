@@ -266,7 +266,7 @@ export default function StatsScreen() {
           {hasBets ? (
             filteredBets.map((bet) => {
               const sc = getStatusConfig(bet.status);
-              const roiPct = bet.wager > 0 ? (((bet.potential_payout || 0) - bet.wager) / bet.wager * 100).toFixed(0) : '0';
+              const roiPctValue = bet.wager > 0 ? ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100 : 0;
               const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
               return (
               <TouchableOpacity
@@ -290,15 +290,15 @@ export default function StatsScreen() {
                 <View style={styles.statsRow}>
                   <View style={styles.statColumn}>
                     <Text style={styles.statLabel}>WAGER</Text>
-                    <Text style={styles.statValue}>${bet.wager}</Text>
+                    <Text style={styles.statValue}>{formatCurrency(bet.wager)}</Text>
                   </View>
                   <View style={styles.statColumn}>
                     <Text style={styles.statLabel}>POTENTIAL</Text>
-                    <Text style={styles.statValue}>${(bet.potential_payout || 0).toFixed(2)}</Text>
+                    <Text style={styles.statValue}>{formatCurrency(bet.potential_payout || 0)}</Text>
                   </View>
                   <View style={styles.statColumn}>
                     <Text style={styles.statLabel}>ROI</Text>
-                    <Text style={styles.roiValue}>+{roiPct}%</Text>
+                    <Text style={styles.roiValue}>{formatPercent(roiPctValue, true)}</Text>
                   </View>
                 </View>
                 <View style={styles.betFooter}>
