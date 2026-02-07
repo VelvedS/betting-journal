@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,146 +13,43 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 
 type FilterType = 'All' | 'Wins' | 'Losses' | 'Pending';
 
-interface BetData {
-  id: string;
-  platform: string;
-  status: 'WIN' | 'LOSS' | 'PENDING';
-  betType: string;
-  wager: number;
-  potential: number;
-  roi: number;
-  date: string;
-  statusColor: string;
-  statusBg: string;
-  iconName: any;
-}
-
-const allBets: BetData[] = [
-  {
-    id: '#0001',
-    platform: 'DraftKings',
-    status: 'WIN',
-    betType: 'Parlay (3 legs)',
-    wager: 50,
-    potential: 425,
-    roi: 750,
-    date: 'Jan 25, 3:45 PM',
-    statusColor: '#10B981',
-    statusBg: '#D1FAE5',
-    iconName: 'checkmark-circle',
-  },
-  {
-    id: '#0002',
-    platform: 'Kalshi',
-    status: 'PENDING',
-    betType: 'Spread',
-    wager: 100,
-    potential: 190,
-    roi: 90,
-    date: 'Jan 25, 1:20 PM',
-    statusColor: '#F59E0B',
-    statusBg: '#FEF3C7',
-    iconName: 'time',
-  },
-  {
-    id: '#0003',
-    platform: 'PrizePicks',
-    status: 'LOSS',
-    betType: 'Over/Under',
-    wager: 25,
-    potential: 47.5,
-    roi: 90,
-    date: 'Jan 24, 8:30 PM',
-    statusColor: '#EF4444',
-    statusBg: '#FEE2E2',
-    iconName: 'close-circle',
-  },
-  {
-    id: '#0004',
-    platform: 'DraftKings',
-    status: 'WIN',
-    betType: 'Moneyline',
-    wager: 75,
-    potential: 142.5,
-    roi: 90,
-    date: 'Jan 23, 6:15 PM',
-    statusColor: '#10B981',
-    statusBg: '#D1FAE5',
-    iconName: 'checkmark-circle',
-  },
-  {
-    id: '#0005',
-    platform: 'FanDuel',
-    status: 'LOSS',
-    betType: 'Parlay (2 legs)',
-    wager: 40,
-    potential: 120,
-    roi: 200,
-    date: 'Jan 22, 4:00 PM',
-    statusColor: '#EF4444',
-    statusBg: '#FEE2E2',
-    iconName: 'close-circle',
-  },
-  {
-    id: '#0006',
-    platform: 'BetMGM',
-    status: 'WIN',
-    betType: 'Spread',
-    wager: 60,
-    potential: 114,
-    roi: 90,
-    date: 'Dec 28, 2:30 PM',
-    statusColor: '#10B981',
-    statusBg: '#D1FAE5',
-    iconName: 'checkmark-circle',
-  },
-  {
-    id: '#0007',
-    platform: 'Caesars',
-    status: 'WIN',
-    betType: 'Over/Under',
-    wager: 85,
-    potential: 161.5,
-    roi: 90,
-    date: 'Dec 25, 7:45 PM',
-    statusColor: '#10B981',
-    statusBg: '#D1FAE5',
-    iconName: 'checkmark-circle',
-  },
-  {
-    id: '#0008',
-    platform: 'DraftKings',
-    status: 'LOSS',
-    betType: 'Parlay (4 legs)',
-    wager: 30,
-    potential: 450,
-    roi: 1400,
-    date: 'Dec 20, 12:00 PM',
-    statusColor: '#EF4444',
-    statusBg: '#FEE2E2',
-    iconName: 'close-circle',
-  },
-];
+const getStatusConfig = (status: string) => {
+  switch (status) {
+    case 'won': return { label: 'WIN', statusColor: '#2DC672', statusBg: '#E8F8F0', icon: 'checkmark-circle' };
+    case 'lost': return { label: 'LOSS', statusColor: '#E85D5D', statusBg: '#FFECEC', icon: 'close-circle' };
+    case 'pending': return { label: 'PENDING', statusColor: '#F5A623', statusBg: '#FFF5E0', icon: 'time' };
+    case 'void': return { label: 'VOID', statusColor: '#999999', statusBg: '#F0F0F0', icon: 'ban' };
+    default: return { label: 'PENDING', statusColor: '#F5A623', statusBg: '#FFF5E0', icon: 'time' };
+  }
+};
 
 export default function StatsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All');
-  const [betCount, setBetCount] = useState<number | null>(null);
+  const [allBets, setAllBets] = useState<any[]>([]);
 
-  useEffect(() => {
+  const fetchBets = useCallback(async () => {
     if (!user) return;
-    supabase
+    const { data } = await supabase
       .from('bets')
-      .select('id', { count: 'exact', head: true })
+      .select('*')
       .eq('user_id', user.id)
-      .then(({ count }) => setBetCount(count ?? 0));
+      .order('placed_at', { ascending: false });
+    setAllBets(data || []);
   }, [user]);
 
-  const hasBets = betCount !== null && betCount > 0;
+  useFocusEffect(
+    useCallback(() => {
+      fetchBets();
+    }, [fetchBets])
+  );
+
+  const hasBets = allBets.length > 0;
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -165,35 +62,40 @@ export default function StatsScreen() {
     }).start();
   }, [selectedFilter]);
 
-  const betsSource = hasBets ? allBets : [];
+  // Counts for filter tabs (always based on all bets)
+  const totalWins = allBets.filter(bet => bet.status === 'won').length;
+  const totalLosses = allBets.filter(bet => bet.status === 'lost').length;
+  const totalPending = allBets.filter(bet => bet.status === 'pending').length;
+  const totalAllBets = allBets.length;
 
-  const totalWins = betsSource.filter(bet => bet.status === 'WIN').length;
-  const totalLosses = betsSource.filter(bet => bet.status === 'LOSS').length;
-  const totalPending = betsSource.filter(bet => bet.status === 'PENDING').length;
-  const totalAllBets = betsSource.length;
-
+  // Filter bets based on selected filter
   const filteredBets = selectedFilter === 'All'
-    ? betsSource
-    : betsSource.filter(bet => {
-        if (selectedFilter === 'Wins') return bet.status === 'WIN';
-        if (selectedFilter === 'Losses') return bet.status === 'LOSS';
-        if (selectedFilter === 'Pending') return bet.status === 'PENDING';
+    ? allBets
+    : allBets.filter(bet => {
+        if (selectedFilter === 'Wins') return bet.status === 'won';
+        if (selectedFilter === 'Losses') return bet.status === 'lost';
+        if (selectedFilter === 'Pending') return bet.status === 'pending';
         return true;
       });
 
+  // Calculate stats based on filtered bets
   const filteredCount = filteredBets.length;
-  const wins = filteredBets.filter(bet => bet.status === 'WIN').length;
-  const losses = filteredBets.filter(bet => bet.status === 'LOSS').length;
+  const wins = filteredBets.filter(bet => bet.status === 'won').length;
+  const losses = filteredBets.filter(bet => bet.status === 'lost').length;
 
-  const totalWagered = filteredBets.reduce((sum, bet) => sum + bet.wager, 0);
+  const totalWagered = filteredBets.reduce((sum, bet) => sum + (bet.wager || 0), 0);
   const totalWon = filteredBets
-    .filter(bet => bet.status === 'WIN')
-    .reduce((sum, bet) => sum + (bet.potential - bet.wager), 0);
+    .filter(bet => bet.status === 'won')
+    .reduce((sum, bet) => sum + ((bet.potential_payout || 0) - (bet.wager || 0)), 0);
   const totalLost = filteredBets
-    .filter(bet => bet.status === 'LOSS')
-    .reduce((sum, bet) => sum + bet.wager, 0);
+    .filter(bet => bet.status === 'lost')
+    .reduce((sum, bet) => sum + (bet.wager || 0), 0);
   const netPL = totalWon - totalLost;
-  const winRate = filteredCount > 0 ? ((wins / filteredCount) * 100).toFixed(1) : '0.0';
+
+  // Win rate: exclude pending/void from denominator
+  const settledBets = wins + losses;
+  const winRate = settledBets > 0 ? ((wins / settledBets) * 100).toFixed(1) : '0.0';
+
   const roi = totalWagered > 0 ? ((netPL / totalWagered) * 100).toFixed(1) : '0.0';
 
   const getValueColor = (value: number) => {
@@ -329,25 +231,29 @@ export default function StatsScreen() {
         {/* Bet Cards List */}
         <View style={styles.betsList}>
           {hasBets ? (
-            filteredBets.map((bet) => (
+            filteredBets.map((bet) => {
+              const sc = getStatusConfig(bet.status);
+              const roiPct = bet.wager > 0 ? (((bet.potential_payout || 0) - bet.wager) / bet.wager * 100).toFixed(0) : '0';
+              const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+              return (
               <TouchableOpacity
                 key={bet.id}
                 style={styles.betCard}
                 activeOpacity={0.7}
-                onPress={() => router.push(`/bet-details/${bet.id.replace('#', '')}`)}
+                onPress={() => router.push(`/bet-details/${bet.id}`)}
               >
                 <View style={styles.betHeader}>
                   <View style={styles.betHeaderLeft}>
-                    <Text style={styles.platformName}>{bet.platform}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: bet.statusBg }]}>
-                      <Text style={[styles.statusBadgeText, { color: bet.statusColor }]}>
-                        {bet.status}
+                    <Text style={styles.platformName}>{bet.sportsbook || 'Unknown'}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: sc.statusBg }]}>
+                      <Text style={[styles.statusBadgeText, { color: sc.statusColor }]}>
+                        {sc.label}
                       </Text>
                     </View>
                   </View>
-                  <Ionicons name={bet.iconName} size={24} color={bet.statusColor} />
+                  <Ionicons name={sc.icon as any} size={24} color={sc.statusColor} />
                 </View>
-                <Text style={styles.betType}>{bet.betType}</Text>
+                <Text style={styles.betType}>{bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : ''}</Text>
                 <View style={styles.statsRow}>
                   <View style={styles.statColumn}>
                     <Text style={styles.statLabel}>WAGER</Text>
@@ -355,19 +261,20 @@ export default function StatsScreen() {
                   </View>
                   <View style={styles.statColumn}>
                     <Text style={styles.statLabel}>POTENTIAL</Text>
-                    <Text style={styles.statValue}>${bet.potential}</Text>
+                    <Text style={styles.statValue}>${(bet.potential_payout || 0).toFixed(2)}</Text>
                   </View>
                   <View style={styles.statColumn}>
                     <Text style={styles.statLabel}>ROI</Text>
-                    <Text style={styles.roiValue}>+{bet.roi}%</Text>
+                    <Text style={styles.roiValue}>+{roiPct}%</Text>
                   </View>
                 </View>
                 <View style={styles.betFooter}>
-                  <Text style={styles.betDate}>{bet.date}</Text>
-                  <Text style={styles.betId}>{bet.id}</Text>
+                  <Text style={styles.betDate}>{dateStr}</Text>
+                  <Text style={styles.betId}>#{String(bet.id).slice(-4)}</Text>
                 </View>
               </TouchableOpacity>
-            ))
+              );
+            })
           ) : (
             <View style={styles.emptyStateCard}>
               <View style={styles.emptyIconCircle}>
