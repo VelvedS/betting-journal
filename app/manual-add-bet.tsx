@@ -415,6 +415,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
   },
+  dateInputPlaceholder: {
+    flex: 1,
+  },
 
   // Pills (Bet Type)
   pillsContainer: {
