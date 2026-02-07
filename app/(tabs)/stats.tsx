@@ -382,6 +382,7 @@ const styles = StyleSheet.create({
     padding: 16,
     boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.03)',
     elevation: 1,
+    overflow: 'hidden' as any,
   },
   iconContainer: {
     marginBottom: 8,
