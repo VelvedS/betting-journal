@@ -112,6 +112,14 @@ export default function StatsScreen() {
     return 20;
   };
 
+  // Pre-calculate formatted values
+  const winsStr = formatWholeNumber(wins);
+  const lossesStr = formatWholeNumber(losses);
+  const netPLStr = formatPL(netPL);
+  const wageredStr = formatCurrency(totalWagered);
+  const winRateStr = formatPercent(winRateValue);
+  const roiStr = formatPercent(roiValue, true);
+
   const subtitleText = filteredCount === 1 ? '1 Total Bet' : `${filteredCount} Total Bets`;
 
   return (
