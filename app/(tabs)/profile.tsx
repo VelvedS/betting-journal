@@ -83,7 +83,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           {/* Notifications */}
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/notifications')}>
             <View style={styles.menuIconCircle}>
               <Ionicons name="notifications-outline" size={22} color="#6B6B6B" />
             </View>
