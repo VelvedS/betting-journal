@@ -273,8 +273,8 @@ export default function ManualAddBetScreen() {
         {/* Field 10 - Date */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>When was this bet placed?</Text>
-          <TouchableOpacity style={styles.textInput} activeOpacity={0.7}>
-            {/* Empty date input */}
+          <TouchableOpacity style={styles.dropdownInput} activeOpacity={0.7}>
+            <View style={styles.dateInputPlaceholder} />
           </TouchableOpacity>
         </View>
 
