@@ -1,30 +1,38 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 
+const AUTH_SCREENS = ['index', 'signup'];
+
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { session, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const hasRedirected = useRef(false);
 
   useEffect(() => {
     if (isLoading) return;
 
-    const inAuthGroup = segments[0] === '(tabs)';
+    const currentScreen = segments[0] || 'index';
+    const onAuthScreen = AUTH_SCREENS.includes(currentScreen as string);
 
-    if (!session && inAuthGroup) {
+    if (!session && !onAuthScreen) {
       // Not signed in but trying to access protected routes
+      hasRedirected.current = true;
       router.replace('/');
-    } else if (session && !inAuthGroup && segments[0] !== 'bet-details') {
+    } else if (session && onAuthScreen && !hasRedirected.current) {
       // Signed in but on login/signup screen
+      hasRedirected.current = true;
       router.replace('/(tabs)');
+    } else {
+      hasRedirected.current = false;
     }
-  }, [session, isLoading, segments]);
+  }, [session, isLoading]);
 
   return <>{children}</>;
 }
