@@ -20,7 +20,7 @@ export default function LoginScreen() {
 
   const handleLogin = () => {
     // Add your authentication logic here
-    router.replace('/dashboard');
+    router.replace('/(tabs)');
   };
 
   const handleSocialLogin = (provider: string) => {
