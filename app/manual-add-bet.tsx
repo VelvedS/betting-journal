@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,10 +16,12 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Image,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -34,10 +36,7 @@ type BetStatus = 'pending' | 'won' | 'lost' | 'void';
 
 // ── Platform data ──
 
-interface PlatformCategory {
-  category: string;
-  platforms: string[];
-}
+interface PlatformCategory { category: string; platforms: string[]; }
 
 const PLATFORM_DATA: PlatformCategory[] = [
   { category: 'Classic DFS Platforms', platforms: ['DraftKings', 'FanDuel', 'Yahoo Fantasy / DFS', 'OwnersBox'] },
@@ -50,10 +49,7 @@ type PlatformListItem = { type: 'category'; category: string } | { type: 'platfo
 
 function buildPlatformItems(data: PlatformCategory[]): PlatformListItem[] {
   const items: PlatformListItem[] = [];
-  for (const g of data) {
-    items.push({ type: 'category', category: g.category });
-    for (const p of g.platforms) items.push({ type: 'platform', name: p });
-  }
+  for (const g of data) { items.push({ type: 'category', category: g.category }); for (const p of g.platforms) items.push({ type: 'platform', name: p }); }
   return items;
 }
 
@@ -61,29 +57,15 @@ function filterPlatforms(data: PlatformCategory[], query: string): PlatformListI
   const q = query.toLowerCase().trim();
   if (!q) return buildPlatformItems(data);
   const items: PlatformListItem[] = [];
-  for (const g of data) {
-    const matched = g.platforms.filter((p) => p.toLowerCase().includes(q));
-    if (matched.length > 0) {
-      items.push({ type: 'category', category: g.category });
-      for (const p of matched) items.push({ type: 'platform', name: p });
-    }
-  }
+  for (const g of data) { const m = g.platforms.filter((p) => p.toLowerCase().includes(q)); if (m.length > 0) { items.push({ type: 'category', category: g.category }); for (const p of m) items.push({ type: 'platform', name: p }); } }
   return items;
 }
 
 // ── Sport data ──
 
-const POPULAR_SPORTS = [
-  'NFL', 'NBA', 'MLB', 'NHL', 'NCAAF', 'NCAAB',
-  'UFC / MMA', 'Soccer (All)', 'Tennis', 'Golf',
-  'Boxing', 'NASCAR', 'PGA Tour', 'Esports',
-];
+const POPULAR_SPORTS = ['NFL', 'NBA', 'MLB', 'NHL', 'NCAAF', 'NCAAB', 'UFC / MMA', 'Soccer (All)', 'Tennis', 'Golf', 'Boxing', 'NASCAR', 'PGA Tour', 'Esports'];
 
-interface SportCategory {
-  category: string;
-  sports: string[];
-}
-
+interface SportCategory { category: string; sports: string[]; }
 const MORE_SPORTS_DATA: SportCategory[] = [
   { category: 'Soccer Leagues', sports: ['EPL', 'La Liga', 'Bundesliga', 'Serie A', 'Ligue 1', 'Champions League', 'Liga MX', 'MLS', 'World Cup'] },
   { category: 'College Sports', sports: ['NCAAW', 'College Baseball', 'College Hockey'] },
@@ -98,51 +80,65 @@ const MORE_SPORTS_DATA: SportCategory[] = [
   { category: 'Entertainment / Specials', sports: ['Politics / Elections', 'Award Shows', 'Reality TV', 'Novelty Props'] },
   { category: 'Other', sports: ['Other'] },
 ];
+const ALL_SPORTS = [...POPULAR_SPORTS, ...MORE_SPORTS_DATA.flatMap((c) => c.sports)];
 
-// Flat list of ALL sports for search
-const ALL_SPORTS = [
-  ...POPULAR_SPORTS,
-  ...MORE_SPORTS_DATA.flatMap((c) => c.sports),
-];
+// ── Payout calculation ──
+
+function calcPayout(wagerStr: string, oddsStr: string, format: OddsFormat): number {
+  const w = parseFloat(wagerStr);
+  if (!w || w <= 0 || !oddsStr.trim()) return 0;
+
+  if (format === 'american') {
+    const cleaned = oddsStr.trim().replace(/^\+/, '');
+    const odds = parseFloat(cleaned);
+    if (isNaN(odds) || odds === 0) return 0;
+    return odds > 0 ? w + w * (odds / 100) : w + w * (100 / Math.abs(odds));
+  }
+  if (format === 'decimal') {
+    const odds = parseFloat(oddsStr.trim());
+    if (isNaN(odds) || odds <= 0) return 0;
+    return w * odds;
+  }
+  if (format === 'fractional') {
+    const parts = oddsStr.trim().split('/');
+    if (parts.length !== 2) return 0;
+    const num = parseFloat(parts[0]);
+    const den = parseFloat(parts[1]);
+    if (isNaN(num) || isNaN(den) || den === 0) return 0;
+    return w + w * (num / den);
+  }
+  return 0;
+}
+
+function formatPayout(val: number): string {
+  return val > 0 ? val.toFixed(2) : '0.00';
+}
+
+function formatDateDisplay(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' at '
+    + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
 
 // ── Shared Bottom Sheet Hook ──
 
 function useBottomSheet() {
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
-
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
       onPanResponderMove: (_, gs) => { if (gs.dy > 0) slideAnim.setValue(gs.dy); },
       onPanResponderRelease: (_, gs) => {
-        if (gs.dy > 100 || gs.vy > 0.5) {
-          closeSheet();
-        } else {
-          Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start();
-        }
+        if (gs.dy > 100 || gs.vy > 0.5) { closeSheet(); }
+        else { Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start(); }
       },
     })
   ).current;
-
   const [visible, setVisible] = useState(false);
-
-  const openSheet = () => {
-    setVisible(true);
-    Animated.parallel([
-      Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-      Animated.timing(overlayAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start();
-  };
-
-  const closeSheet = () => {
-    Animated.parallel([
-      Animated.timing(slideAnim, { toValue: SHEET_HEIGHT, duration: 250, useNativeDriver: true }),
-      Animated.timing(overlayAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
-    ]).start(() => setVisible(false));
-  };
-
+  const openSheet = () => { setVisible(true); Animated.parallel([Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }), Animated.timing(overlayAnim, { toValue: 1, duration: 300, useNativeDriver: true })]).start(); };
+  const closeSheet = () => { Animated.parallel([Animated.timing(slideAnim, { toValue: SHEET_HEIGHT, duration: 250, useNativeDriver: true }), Animated.timing(overlayAnim, { toValue: 0, duration: 250, useNativeDriver: true })]).start(() => setVisible(false)); };
   return { visible, slideAnim, overlayAnim, panResponder, openSheet, closeSheet };
 }
 
@@ -150,17 +146,99 @@ function useBottomSheet() {
 
 export default function ManualAddBetScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    sportsbook?: string; bet_type?: string; sport?: string; matchup?: string;
+    description?: string; odds?: string; odds_format?: string; wager?: string;
+    potential_payout?: string; status?: string; placed_at?: string; notes?: string;
+    ticket_image_url?: string; parlay_legs?: string; tags?: string; confidence?: string;
+  }>();
+
+  const hasRouteParams = Object.keys(params).length > 0;
 
   // Form state
-  const [betType, setBetType] = useState<BetType>('moneyline');
-  const [oddsFormat, setOddsFormat] = useState<OddsFormat>('american');
-  const [status, setStatus] = useState<BetStatus>('pending');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [wager, setWager] = useState('');
-  const [payout, setPayout] = useState('');
+  const [betType, setBetType] = useState<BetType>(() => {
+    const m: Record<string, BetType> = { moneyline: 'moneyline', spread: 'spread', over_under: 'ou', ou: 'ou', parlay: 'parlay', prop: 'prop', other: 'other' };
+    return (params.bet_type && m[params.bet_type]) || 'moneyline';
+  });
+  const [oddsFormat, setOddsFormat] = useState<OddsFormat>(() => {
+    const m: Record<string, OddsFormat> = { american: 'american', decimal: 'decimal', fractional: 'fractional' };
+    return (params.odds_format && m[params.odds_format]) || 'american';
+  });
+  const [status, setStatus] = useState<BetStatus>(() => {
+    const m: Record<string, BetStatus> = { pending: 'pending', won: 'won', lost: 'lost', void: 'void' };
+    return (params.status && m[params.status]) || 'pending';
+  });
+  const [selectedTags, setSelectedTags] = useState<string[]>(() => {
+    if (!params.tags) return [];
+    try { return JSON.parse(params.tags); } catch { return []; }
+  });
+  const [wager, setWager] = useState(params.wager || '');
+  const [odds, setOdds] = useState(params.odds || '');
+  const [matchup, setMatchup] = useState(params.matchup || '');
+  const [description, setDescription] = useState(params.description || '');
+  const [notes, setNotes] = useState(params.notes || '');
 
-  // ── Sportsbook state ──
-  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
+  // Payout
+  const computedPayout = calcPayout(wager, odds, oddsFormat);
+  const payoutDisplay = formatPayout(computedPayout);
+  const aiPayout = params.potential_payout ? parseFloat(params.potential_payout) : null;
+  const showAiPayoutNote = aiPayout !== null && Math.abs(aiPayout - computedPayout) > 1 && computedPayout > 0;
+
+  // Date state
+  const [placedAt, setPlacedAt] = useState<Date | null>(() => {
+    if (params.placed_at) { const d = new Date(params.placed_at); return isNaN(d.getTime()) ? null : d; }
+    return null;
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [tempDate, setTempDate] = useState<Date>(new Date());
+
+  const minDate = new Date(); minDate.setFullYear(minDate.getFullYear() - 1);
+  const maxDate = new Date();
+
+  const handleDateChange = (_: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (selectedDate) { setTempDate(selectedDate); setShowTimePicker(true); }
+    } else {
+      if (selectedDate) setTempDate(selectedDate);
+    }
+  };
+
+  const handleTimeChange = (_: any, selectedTime?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+      if (selectedTime) {
+        const final = new Date(tempDate);
+        final.setHours(selectedTime.getHours(), selectedTime.getMinutes());
+        setPlacedAt(final);
+      }
+    } else {
+      if (selectedTime) setTempDate(selectedTime);
+    }
+  };
+
+  const handleOpenDatePicker = () => {
+    setTempDate(placedAt || new Date());
+    if (Platform.OS === 'web') {
+      setShowDatePicker(true);
+    } else {
+      setShowDatePicker(true);
+    }
+  };
+
+  const handleConfirmWebDate = () => {
+    setPlacedAt(tempDate);
+    setShowDatePicker(false);
+  };
+
+  // Ticket image
+  const [ticketImageUrl, setTicketImageUrl] = useState(params.ticket_image_url || '');
+  const [confidence, setConfidence] = useState(() => params.confidence ? parseFloat(params.confidence) : null);
+  const [showAiBanner, setShowAiBanner] = useState(hasRouteParams);
+
+  // Sportsbook state
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(params.sportsbook || null);
   const [isPlatformOther, setIsPlatformOther] = useState(false);
   const [customPlatform, setCustomPlatform] = useState('');
   const [platformSearch, setPlatformSearch] = useState('');
@@ -175,8 +253,8 @@ export default function ManualAddBetScreen() {
   const handleClearPlatform = () => { setIsPlatformOther(false); setCustomPlatform(''); setSelectedPlatform(null); };
   const filteredPlatformItems = filterPlatforms(PLATFORM_DATA, platformSearch);
 
-  // ── Sport state ──
-  const [selectedSport, setSelectedSport] = useState<string | null>(null);
+  // Sport state
+  const [selectedSport, setSelectedSport] = useState<string | null>(params.sport || null);
   const [isSportOther, setIsSportOther] = useState(false);
   const [customSport, setCustomSport] = useState('');
   const [sportSearch, setSportSearch] = useState('');
@@ -199,31 +277,18 @@ export default function ManualAddBetScreen() {
     Animated.timing(chevronAnim, { toValue: next ? 1 : 0, duration: 250, useNativeDriver: true }).start();
   };
 
-  const filteredSports = sportSearch.trim()
-    ? ALL_SPORTS.filter((s) => s.toLowerCase().includes(sportSearch.toLowerCase().trim()))
-    : null;
+  const filteredSports = sportSearch.trim() ? ALL_SPORTS.filter((s) => s.toLowerCase().includes(sportSearch.toLowerCase().trim())) : null;
 
-  // ── Helpers ──
+  // Helpers
   const getOddsPlaceholder = () => {
-    switch (oddsFormat) {
-      case 'american': return '+150 or -110';
-      case 'decimal': return '2.50';
-      case 'fractional': return '3/2';
-      default: return '+150 or -110';
-    }
+    switch (oddsFormat) { case 'american': return '+150 or -110'; case 'decimal': return '2.50'; case 'fractional': return '3/2'; default: return '+150 or -110'; }
   };
-
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
-  };
-
+  const toggleTag = (tag: string) => { setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]); };
   const handleSaveBet = () => { router.back(); };
 
-  // ── Platform sheet renderer ──
+  // Platform sheet renderer
   const renderPlatformItem = ({ item }: { item: PlatformListItem }) => {
-    if (item.type === 'category') return (
-      <View style={bsStyles.categoryHeader}><Text style={bsStyles.categoryText}>{item.category}</Text></View>
-    );
+    if (item.type === 'category') return <View style={bsStyles.categoryHeader}><Text style={bsStyles.categoryText}>{item.category}</Text></View>;
     const sel = (!isPlatformOther && selectedPlatform === item.name) || (isPlatformOther && item.name === 'Other');
     return (
       <TouchableOpacity style={bsStyles.listRow} onPress={() => handleSelectPlatform(item.name)} activeOpacity={0.6}>
@@ -233,61 +298,34 @@ export default function ManualAddBetScreen() {
     );
   };
 
-  // ── Sport sheet content ──
+  // Sport sheet content
   const chevronRotate = chevronAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
 
   const renderSportSheetContent = () => {
-    // Search mode — flat filtered list
     if (filteredSports) {
       return (
         <ScrollView contentContainerStyle={bsStyles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          {filteredSports.length === 0 ? (
-            <View style={bsStyles.emptyContainer}><Text style={bsStyles.emptyText}>No sports found</Text></View>
-          ) : (
+          {filteredSports.length === 0 ? <View style={bsStyles.emptyContainer}><Text style={bsStyles.emptyText}>No sports found</Text></View> :
             filteredSports.map((sport, i) => {
               const sel = (!isSportOther && selectedSport === sport) || (isSportOther && sport === 'Other');
-              return (
-                <TouchableOpacity key={`${sport}-${i}`} style={bsStyles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}>
-                  <Text style={bsStyles.listRowText}>{sport}</Text>
-                  {sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}
-                </TouchableOpacity>
-              );
-            })
-          )}
+              return <TouchableOpacity key={`${sport}-${i}`} style={bsStyles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={bsStyles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
+            })}
         </ScrollView>
       );
     }
-
-    // Default mode — Popular chips + collapsible More Sports
     return (
       <ScrollView contentContainerStyle={bsStyles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {/* Popular Section */}
         <View style={bsStyles.categoryHeader}><Text style={bsStyles.categoryText}>Popular</Text></View>
         <View style={sportStyles.chipsGrid}>
           {POPULAR_SPORTS.map((sport) => {
             const sel = !isSportOther && selectedSport === sport;
-            return (
-              <TouchableOpacity
-                key={sport}
-                style={[sportStyles.chip, sel && sportStyles.chipSelected]}
-                onPress={() => handleSelectSport(sport)}
-                activeOpacity={0.7}
-              >
-                <Text style={[sportStyles.chipText, sel && sportStyles.chipTextSelected]}>{sport}</Text>
-                {sel && <Ionicons name="checkmark" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />}
-              </TouchableOpacity>
-            );
+            return <TouchableOpacity key={sport} style={[sportStyles.chip, sel && sportStyles.chipSelected]} onPress={() => handleSelectSport(sport)} activeOpacity={0.7}><Text style={[sportStyles.chipText, sel && sportStyles.chipTextSelected]}>{sport}</Text>{sel && <Ionicons name="checkmark" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />}</TouchableOpacity>;
           })}
         </View>
-
-        {/* More Sports Collapsible */}
         <TouchableOpacity style={sportStyles.moreSportsHeader} onPress={toggleMoreSports} activeOpacity={0.7}>
           <Text style={sportStyles.moreSportsTitle}>More Sports</Text>
-          <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
-            <Ionicons name="chevron-down" size={16} color="#9B9B9B" />
-          </Animated.View>
+          <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}><Ionicons name="chevron-down" size={16} color="#9B9B9B" /></Animated.View>
         </TouchableOpacity>
-
         {moreSportsExpanded && (
           <View style={sportStyles.moreSportsContent}>
             {MORE_SPORTS_DATA.map((cat) => (
@@ -295,12 +333,7 @@ export default function ManualAddBetScreen() {
                 <View style={bsStyles.categoryHeader}><Text style={bsStyles.categoryText}>{cat.category}</Text></View>
                 {cat.sports.map((sport, i) => {
                   const sel = (!isSportOther && selectedSport === sport) || (isSportOther && sport === 'Other');
-                  return (
-                    <TouchableOpacity key={`${sport}-${i}`} style={bsStyles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}>
-                      <Text style={bsStyles.listRowText}>{sport}</Text>
-                      {sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}
-                    </TouchableOpacity>
-                  );
+                  return <TouchableOpacity key={`${sport}-${i}`} style={bsStyles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={bsStyles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
                 })}
               </View>
             ))}
@@ -319,12 +352,26 @@ export default function ManualAddBetScreen() {
           <Ionicons name="arrow-back" size={22} color="#1A1A1A" />
         </TouchableOpacity>
 
+        {/* AI Banner */}
+        {hasRouteParams && showAiBanner && (
+          <View style={aiStyles.banner}>
+            <Ionicons name="sparkles" size={18} color="#6C63FF" />
+            <View style={aiStyles.bannerTextWrap}>
+              <Text style={aiStyles.bannerText}>AI-extracted — please review before saving</Text>
+              {confidence !== null && <Text style={aiStyles.confidenceText}>Confidence: {Math.round(confidence * 100)}%</Text>}
+            </View>
+            <TouchableOpacity onPress={() => setShowAiBanner(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={16} color="#6C63FF" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Field 1 - Sportsbook */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>Where did you place this bet?</Text>
           {isPlatformOther ? (
             <View style={styles.customInputContainer}>
-              <TextInput style={styles.customInput} placeholder="Type platform name..." placeholderTextColor="#9B9B9B" value={customPlatform} onChangeText={setCustomPlatform} autoFocus />
+              <TextInput style={styles.customInput} placeholder="Type platform name..." placeholderTextColor="#9B9B9B" value={customPlatform} onChangeText={setCustomPlatform} />
               <TouchableOpacity style={styles.clearButton} onPress={handleClearPlatform} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={14} color="#9B9B9B" /><Text style={styles.clearText}>Clear</Text>
               </TouchableOpacity>
@@ -344,7 +391,7 @@ export default function ManualAddBetScreen() {
             {(['moneyline', 'spread', 'ou', 'parlay', 'prop', 'other'] as BetType[]).map((type) => (
               <TouchableOpacity key={type} style={[styles.pill, betType === type && styles.pillActive]} onPress={() => setBetType(type)} activeOpacity={0.7}>
                 <Text style={[styles.pillText, betType === type && styles.pillTextActive]}>
-                  {type === 'ou' ? 'O/U' : type === 'moneyline' ? 'Moneyline' : type === 'spread' ? 'Spread' : type === 'parlay' ? 'Parlay' : type === 'prop' ? 'Prop' : 'Other'}
+                  {type === 'ou' ? 'O/U' : type.charAt(0).toUpperCase() + type.slice(1)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -356,7 +403,7 @@ export default function ManualAddBetScreen() {
           <Text style={styles.fieldLabel}>What sport?</Text>
           {isSportOther ? (
             <View style={styles.customInputContainer}>
-              <TextInput style={styles.customInput} placeholder="Type sport name..." placeholderTextColor="#9B9B9B" value={customSport} onChangeText={setCustomSport} autoFocus />
+              <TextInput style={styles.customInput} placeholder="Type sport name..." placeholderTextColor="#9B9B9B" value={customSport} onChangeText={setCustomSport} />
               <TouchableOpacity style={styles.clearButton} onPress={handleClearSport} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={14} color="#9B9B9B" /><Text style={styles.clearText}>Clear</Text>
               </TouchableOpacity>
@@ -372,13 +419,13 @@ export default function ManualAddBetScreen() {
         {/* Field 4 - Matchup */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>Who's playing? (Matchup/Event)</Text>
-          <TextInput style={styles.textInput} placeholder="e.g., Lakers vs Warriors" placeholderTextColor="#9B9B9B" />
+          <TextInput style={styles.textInput} placeholder="e.g., Lakers vs Warriors" placeholderTextColor="#9B9B9B" value={matchup} onChangeText={setMatchup} />
         </View>
 
         {/* Field 5 - Description */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>Describe your bet</Text>
-          <TextInput style={[styles.textInput, styles.textareaInput]} placeholder="e.g., Lakers -5.5, Over 225.5" placeholderTextColor="#9B9B9B" multiline numberOfLines={3} textAlignVertical="top" />
+          <TextInput style={[styles.textInput, styles.textareaInput]} placeholder="e.g., Lakers -5.5, Over 225.5" placeholderTextColor="#9B9B9B" multiline numberOfLines={3} textAlignVertical="top" value={description} onChangeText={setDescription} />
         </View>
 
         {/* Field 6 - Odds */}
@@ -391,7 +438,7 @@ export default function ManualAddBetScreen() {
               </TouchableOpacity>
             ))}
           </View>
-          <TextInput style={styles.textInput} placeholder={getOddsPlaceholder()} placeholderTextColor="#9B9B9B" />
+          <TextInput style={styles.textInput} placeholder={getOddsPlaceholder()} placeholderTextColor="#9B9B9B" value={odds} onChangeText={setOdds} />
         </View>
 
         {/* Field 7 - Wager */}
@@ -411,8 +458,11 @@ export default function ManualAddBetScreen() {
           </View>
           <View style={[styles.currencyInputContainer, styles.readOnlyInput]}>
             <Text style={styles.currencySymbol}>$</Text>
-            <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" editable={false} value={payout} />
+            <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" editable={false} value={payoutDisplay} />
           </View>
+          {showAiPayoutNote && (
+            <Text style={aiStyles.payoutNote}>AI estimate: ${aiPayout!.toFixed(2)} — recalculated: ${payoutDisplay}</Text>
+          )}
         </View>
 
         {/* Field 9 - Status */}
@@ -420,15 +470,8 @@ export default function ManualAddBetScreen() {
           <Text style={styles.fieldLabel}>Status</Text>
           <View style={styles.statusContainer}>
             {(['pending', 'won', 'lost', 'void'] as BetStatus[]).map((s) => (
-              <TouchableOpacity
-                key={s}
-                style={[styles.statusPill, status === s && (s === 'pending' ? styles.statusPillPending : styles.statusPillActive)]}
-                onPress={() => setStatus(s)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.statusPillText, status === s && (s === 'pending' ? styles.statusPillTextPending : styles.statusPillTextActive)]}>
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
-                </Text>
+              <TouchableOpacity key={s} style={[styles.statusPill, status === s && (s === 'pending' ? styles.statusPillPending : styles.statusPillActive)]} onPress={() => setStatus(s)} activeOpacity={0.7}>
+                <Text style={[styles.statusPillText, status === s && (s === 'pending' ? styles.statusPillTextPending : styles.statusPillTextActive)]}>{s.charAt(0).toUpperCase() + s.slice(1)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -437,29 +480,110 @@ export default function ManualAddBetScreen() {
         {/* Field 10 - Date */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>When was this bet placed?</Text>
-          <TouchableOpacity style={styles.dropdownInput} activeOpacity={0.7}>
-            <View style={styles.dateInputPlaceholder} />
+          <TouchableOpacity style={styles.dropdownInput} onPress={handleOpenDatePicker} activeOpacity={0.7}>
+            <Ionicons name="calendar-outline" size={18} color="#9B9B9B" style={{ marginRight: 10 }} />
+            <Text style={[styles.dropdownValueText, !placedAt && styles.dropdownPlaceholderText]}>
+              {placedAt ? formatDateDisplay(placedAt) : 'Select date and time'}
+            </Text>
           </TouchableOpacity>
+
+          {/* Web date picker modal */}
+          {Platform.OS === 'web' && showDatePicker && (
+            <Modal visible transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+              <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+                <View style={dateStyles.overlay}>
+                  <TouchableWithoutFeedback onPress={() => {}}>
+                    <View style={dateStyles.webPickerCard}>
+                      <Text style={dateStyles.webPickerTitle}>Select date and time</Text>
+                      <View style={dateStyles.webInputRow}>
+                        <Text style={dateStyles.webLabel}>Date</Text>
+                        <TextInput
+                          style={dateStyles.webInput}
+                          value={`${tempDate.getFullYear()}-${String(tempDate.getMonth() + 1).padStart(2, '0')}-${String(tempDate.getDate()).padStart(2, '0')}`}
+                          onChangeText={(text) => {
+                            const parts = text.split('-');
+                            if (parts.length === 3) {
+                              const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), tempDate.getHours(), tempDate.getMinutes());
+                              if (!isNaN(d.getTime())) setTempDate(d);
+                            }
+                          }}
+                          placeholder="YYYY-MM-DD"
+                          placeholderTextColor="#9B9B9B"
+                        />
+                      </View>
+                      <View style={dateStyles.webInputRow}>
+                        <Text style={dateStyles.webLabel}>Time</Text>
+                        <TextInput
+                          style={dateStyles.webInput}
+                          value={`${String(tempDate.getHours()).padStart(2, '0')}:${String(tempDate.getMinutes()).padStart(2, '0')}`}
+                          onChangeText={(text) => {
+                            const parts = text.split(':');
+                            if (parts.length === 2) {
+                              const d = new Date(tempDate);
+                              d.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0);
+                              if (!isNaN(d.getTime())) setTempDate(d);
+                            }
+                          }}
+                          placeholder="HH:MM"
+                          placeholderTextColor="#9B9B9B"
+                        />
+                      </View>
+                      <View style={dateStyles.webButtonRow}>
+                        <TouchableOpacity style={dateStyles.webCancelBtn} onPress={() => setShowDatePicker(false)}>
+                          <Text style={dateStyles.webCancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={dateStyles.webConfirmBtn} onPress={handleConfirmWebDate}>
+                          <Text style={dateStyles.webConfirmText}>Confirm</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </TouchableWithoutFeedback>
+                </View>
+              </TouchableWithoutFeedback>
+            </Modal>
+          )}
+
+          {/* Native date picker */}
+          {Platform.OS !== 'web' && showDatePicker && (
+            <DateTimePicker value={tempDate} mode="date" display="default" onChange={handleDateChange} minimumDate={minDate} maximumDate={maxDate} />
+          )}
+          {Platform.OS !== 'web' && showTimePicker && (
+            <DateTimePicker value={tempDate} mode="time" display="default" onChange={handleTimeChange} />
+          )}
         </View>
 
         {/* Field 11 - Notes */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>Notes (Optional)</Text>
-          <TextInput style={[styles.textInput, styles.textareaInputLarge]} placeholder="Why did you make this bet?" placeholderTextColor="#9B9B9B" multiline numberOfLines={4} textAlignVertical="top" />
+          <TextInput style={[styles.textInput, styles.textareaInputLarge]} placeholder="Why did you make this bet?" placeholderTextColor="#9B9B9B" multiline numberOfLines={4} textAlignVertical="top" value={notes} onChangeText={setNotes} />
         </View>
 
         {/* Field 12 - Upload Screenshot */}
         <View style={styles.formField}>
           <Text style={styles.fieldLabel}>Upload Ticket Screenshot (Optional)</Text>
-          <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7}>
-            <Ionicons name="cloud-upload-outline" size={28} color="#9B9B9B" />
-            <Text style={styles.uploadTitle}>Choose Photo or Take Photo</Text>
-            <Text style={styles.uploadHint}>PNG, JPG up to 10MB</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.takePhotoButton} activeOpacity={0.7}>
-            <Ionicons name="camera-outline" size={18} color="#4A4A4A" style={styles.takePhotoIcon} />
-            <Text style={styles.takePhotoText}>Take Photo</Text>
-          </TouchableOpacity>
+          {ticketImageUrl ? (
+            <View style={aiStyles.imagePreviewWrap}>
+              <Image source={{ uri: ticketImageUrl }} style={aiStyles.imagePreview} resizeMode="cover" />
+              <TouchableOpacity style={aiStyles.imageRemoveBtn} onPress={() => setTicketImageUrl('')} activeOpacity={0.7}>
+                <Ionicons name="close" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity style={aiStyles.retakeBtn} activeOpacity={0.7} onPress={() => setTicketImageUrl('')}>
+                <Text style={aiStyles.retakeText}>Retake / Re-upload</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7}>
+                <Ionicons name="cloud-upload-outline" size={28} color="#9B9B9B" />
+                <Text style={styles.uploadTitle}>Choose Photo or Take Photo</Text>
+                <Text style={styles.uploadHint}>PNG, JPG up to 10MB</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.takePhotoButton} activeOpacity={0.7}>
+                <Ionicons name="camera-outline" size={18} color="#4A4A4A" style={styles.takePhotoIcon} />
+                <Text style={styles.takePhotoText}>Take Photo</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Field 13 - Tags */}
@@ -480,56 +604,32 @@ export default function ManualAddBetScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* ── Platform Bottom Sheet ── */}
+      {/* Platform Bottom Sheet */}
       <Modal visible={platformSheet.visible} transparent animationType="none" onRequestClose={platformSheet.closeSheet}>
         <View style={bsStyles.modalContainer}>
-          <TouchableWithoutFeedback onPress={platformSheet.closeSheet}>
-            <Animated.View style={[bsStyles.overlay, { opacity: platformSheet.overlayAnim }]} />
-          </TouchableWithoutFeedback>
+          <TouchableWithoutFeedback onPress={platformSheet.closeSheet}><Animated.View style={[bsStyles.overlay, { opacity: platformSheet.overlayAnim }]} /></TouchableWithoutFeedback>
           <Animated.View style={[bsStyles.sheet, { transform: [{ translateY: platformSheet.slideAnim }] }]}>
-            <View style={bsStyles.handleArea} {...platformSheet.panResponder.panHandlers}>
-              <View style={bsStyles.handle} />
-            </View>
+            <View style={bsStyles.handleArea} {...platformSheet.panResponder.panHandlers}><View style={bsStyles.handle} /></View>
             <View style={bsStyles.searchContainer}>
               <Ionicons name="search" size={18} color="#9B9B9B" style={bsStyles.searchIcon} />
               <TextInput style={bsStyles.searchInput} placeholder="Search platforms..." placeholderTextColor="#9B9B9B" value={platformSearch} onChangeText={setPlatformSearch} autoCorrect={false} autoCapitalize="none" />
-              {platformSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setPlatformSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close-circle" size={18} color="#C0C0C0" />
-                </TouchableOpacity>
-              )}
+              {platformSearch.length > 0 && <TouchableOpacity onPress={() => setPlatformSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close-circle" size={18} color="#C0C0C0" /></TouchableOpacity>}
             </View>
-            <FlatList
-              data={filteredPlatformItems}
-              renderItem={renderPlatformItem}
-              keyExtractor={(item, i) => item.type === 'category' ? `pcat-${item.category}` : `pplat-${(item as any).name}-${i}`}
-              contentContainerStyle={bsStyles.listContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={<View style={bsStyles.emptyContainer}><Text style={bsStyles.emptyText}>No platforms found</Text></View>}
-            />
+            <FlatList data={filteredPlatformItems} renderItem={renderPlatformItem} keyExtractor={(item, i) => item.type === 'category' ? `pcat-${item.category}` : `pplat-${(item as any).name}-${i}`} contentContainerStyle={bsStyles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} ListEmptyComponent={<View style={bsStyles.emptyContainer}><Text style={bsStyles.emptyText}>No platforms found</Text></View>} />
           </Animated.View>
         </View>
       </Modal>
 
-      {/* ── Sport Bottom Sheet ── */}
+      {/* Sport Bottom Sheet */}
       <Modal visible={sportSheet.visible} transparent animationType="none" onRequestClose={sportSheet.closeSheet}>
         <View style={bsStyles.modalContainer}>
-          <TouchableWithoutFeedback onPress={sportSheet.closeSheet}>
-            <Animated.View style={[bsStyles.overlay, { opacity: sportSheet.overlayAnim }]} />
-          </TouchableWithoutFeedback>
+          <TouchableWithoutFeedback onPress={sportSheet.closeSheet}><Animated.View style={[bsStyles.overlay, { opacity: sportSheet.overlayAnim }]} /></TouchableWithoutFeedback>
           <Animated.View style={[bsStyles.sheet, { transform: [{ translateY: sportSheet.slideAnim }] }]}>
-            <View style={bsStyles.handleArea} {...sportSheet.panResponder.panHandlers}>
-              <View style={bsStyles.handle} />
-            </View>
+            <View style={bsStyles.handleArea} {...sportSheet.panResponder.panHandlers}><View style={bsStyles.handle} /></View>
             <View style={bsStyles.searchContainer}>
               <Ionicons name="search" size={18} color="#9B9B9B" style={bsStyles.searchIcon} />
               <TextInput style={bsStyles.searchInput} placeholder="Search sports..." placeholderTextColor="#9B9B9B" value={sportSearch} onChangeText={setSportSearch} autoCorrect={false} autoCapitalize="none" />
-              {sportSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setSportSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close-circle" size={18} color="#C0C0C0" />
-                </TouchableOpacity>
-              )}
+              {sportSearch.length > 0 && <TouchableOpacity onPress={() => setSportSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close-circle" size={18} color="#C0C0C0" /></TouchableOpacity>}
             </View>
             {renderSportSheetContent()}
           </Animated.View>
@@ -539,8 +639,36 @@ export default function ManualAddBetScreen() {
   );
 }
 
-// ── Shared bottom sheet styles ──
+// ── AI styles ──
+const aiStyles = StyleSheet.create({
+  banner: { backgroundColor: '#F0EEFF', borderRadius: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, marginBottom: 20, gap: 10 },
+  bannerTextWrap: { flex: 1 },
+  bannerText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
+  confidenceText: { fontSize: 12, fontWeight: '400', color: '#9B9B9B', marginTop: 2 },
+  payoutNote: { fontSize: 12, fontWeight: '400', color: '#6C63FF', marginTop: 6 },
+  imagePreviewWrap: { position: 'relative', marginBottom: 12 },
+  imagePreview: { width: '100%', height: 120, borderRadius: 10, backgroundColor: '#E0E0E0' },
+  imageRemoveBtn: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  retakeBtn: { alignItems: 'center', paddingVertical: 10 },
+  retakeText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
+});
 
+// ── Date picker styles ──
+const dateStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: '#00000066', justifyContent: 'center', alignItems: 'center' },
+  webPickerCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, width: 320 },
+  webPickerTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', marginBottom: 20, textAlign: 'center' },
+  webInputRow: { marginBottom: 16 },
+  webLabel: { fontSize: 13, fontWeight: '600', color: '#4A4A4A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  webInput: { backgroundColor: '#F0F0F0', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: '#1A1A1A', height: 46 },
+  webButtonRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  webCancelBtn: { flex: 1, backgroundColor: '#F0F0F0', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  webCancelText: { fontSize: 15, fontWeight: '600', color: '#4A4A4A' },
+  webConfirmBtn: { flex: 1, backgroundColor: '#10B981', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  webConfirmText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+});
+
+// ── Shared bottom sheet styles ──
 const bsStyles = StyleSheet.create({
   modalContainer: { flex: 1, justifyContent: 'flex-end' },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#00000066' },
@@ -560,61 +688,18 @@ const bsStyles = StyleSheet.create({
 });
 
 // ── Sport-specific styles ──
-
 const sportStyles = StyleSheet.create({
-  chipsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    gap: 10,
-    marginBottom: 8,
-  },
-  chip: {
-    backgroundColor: '#F0F0F0',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    height: 42,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    minWidth: '45%' as any,
-    flexGrow: 1,
-    flexBasis: '45%' as any,
-  },
-  chipSelected: {
-    backgroundColor: '#10B981',
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1A1A1A',
-  },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  moreSportsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  moreSportsTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  moreSportsContent: {
-    paddingBottom: 20,
-  },
+  chipsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10, marginBottom: 8 },
+  chip: { backgroundColor: '#F0F0F0', borderRadius: 10, paddingHorizontal: 16, height: 42, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', minWidth: '45%' as any, flexGrow: 1, flexBasis: '45%' as any },
+  chipSelected: { backgroundColor: '#10B981' },
+  chipText: { fontSize: 14, fontWeight: '500', color: '#1A1A1A' },
+  chipTextSelected: { color: '#FFFFFF', fontWeight: '600' },
+  moreSportsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, marginTop: 8, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  moreSportsTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
+  moreSportsContent: { paddingBottom: 20 },
 });
 
 // ── Form styles ──
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F5' },
   scrollView: { flex: 1 },
@@ -647,7 +732,7 @@ const styles = StyleSheet.create({
   oddsFormatText: { fontSize: 13, fontWeight: '600', color: '#1A1A1A' },
   oddsFormatTextActive: { color: '#FFFFFF' },
   currencyInputContainer: { backgroundColor: '#F0F0F0', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, height: 50, flexDirection: 'row', alignItems: 'center' },
-  readOnlyInput: { backgroundColor: '#F5F5F5' },
+  readOnlyInput: { backgroundColor: '#EBEBEB' },
   currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', marginRight: 8 },
   currencyInput: { flex: 1, fontSize: 14, fontWeight: '400', color: '#1A1A1A' },
   statusContainer: { flexDirection: 'row', gap: 10 },
