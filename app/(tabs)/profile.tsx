@@ -1,18 +1,105 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut, user } = useAuth();
+  const [totalBets, setTotalBets] = useState<number | null>(null);
+  const [winRate, setWinRate] = useState<number | null>(null);
+  const [profit, setProfit] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchStats = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data: bets, error } = await supabase
+        .from('bets')
+        .select('id, status, wager, potential_payout')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Failed to fetch bets:', error);
+        setTotalBets(0);
+        setWinRate(0);
+        setProfit(0);
+        setLoading(false);
+        return;
+      }
+
+      if (!bets || bets.length === 0) {
+        setTotalBets(0);
+        setWinRate(0);
+        setProfit(0);
+        setLoading(false);
+        return;
+      }
+
+      // Calculate total bets
+      const total = bets.length;
+      setTotalBets(total);
+
+      // Calculate win rate (exclude pending and void from denominator)
+      const wonBets = bets.filter(b => b.status === 'won');
+      const lostBets = bets.filter(b => b.status === 'lost');
+      const settledBets = wonBets.length + lostBets.length;
+      const rate = settledBets > 0 ? (wonBets.length / settledBets) * 100 : 0;
+      setWinRate(rate);
+
+      // Calculate profit
+      const wonProfit = wonBets.reduce((sum, b) => sum + ((b.potential_payout || 0) - (b.wager || 0)), 0);
+      const lostProfit = lostBets.reduce((sum, b) => sum + (b.wager || 0), 0);
+      const netProfit = wonProfit - lostProfit;
+      setProfit(netProfit);
+
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching stats:', err);
+      setTotalBets(0);
+      setWinRate(0);
+      setProfit(0);
+      setLoading(false);
+    }
+  }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchStats();
+    }, [fetchStats])
+  );
 
   const handleSignOut = async () => {
     await signOut();
     // AuthGuard in _layout.tsx handles navigation back to login
   };
+
+  const formatProfit = (value: number | null): string => {
+    if (value === null) return '—';
+    if (value === 0) return '$0';
+    const absValue = Math.abs(value);
+    if (absValue >= 1000) {
+      const formatted = (absValue / 1000).toFixed(1);
+      return value >= 0 ? `$${formatted}K` : `-$${formatted}K`;
+    }
+    return value >= 0 ? `$${Math.round(value)}` : `-$${Math.round(absValue)}`;
+  };
+
+  const formatWinRate = (value: number | null): string => {
+    if (value === null) return '—';
+    return `${Math.round(value)}%`;
+  };
+
+  const profitColor = profit === null || profit >= 0 ? '#10B981' : '#E85D5D';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -43,15 +130,17 @@ export default function ProfileScreen() {
           {/* Stats Section */}
           <View style={styles.statsSection}>
             <View style={styles.statColumn}>
-              <Text style={styles.statValue}>124</Text>
+              <Text style={styles.statValue}>{loading ? '—' : totalBets}</Text>
               <Text style={styles.statLabel}>TOTAL BETS</Text>
             </View>
             <View style={styles.statColumn}>
-              <Text style={styles.statValue}>68%</Text>
+              <Text style={styles.statValue}>{loading ? '—' : formatWinRate(winRate)}</Text>
               <Text style={styles.statLabel}>WIN RATE</Text>
             </View>
             <View style={styles.statColumn}>
-              <Text style={[styles.statValue, styles.statValueProfit]}>$2.4K</Text>
+              <Text style={[styles.statValue, { color: profitColor }]}>
+                {loading ? '—' : formatProfit(profit)}
+              </Text>
               <Text style={styles.statLabel}>PROFIT</Text>
             </View>
           </View>
