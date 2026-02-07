@@ -70,12 +70,10 @@ export default function AddBetScreen() {
         }).start();
       }, 2200);
 
-      // Auto-advance to success screen
-      const timer = setTimeout(() => {
-        setScreen('success');
-      }, 3500);
+      // Call Edge Function to extract bet details
+      callExtractBetDetailsFunction();
 
-      return () => clearTimeout(timer);
+      return () => {};
     } else if (screen === 'success') {
       // Checkmark pop-in animation
       checkmarkScale.setValue(0);
@@ -86,10 +84,10 @@ export default function AddBetScreen() {
         useNativeDriver: true,
       }).start();
 
-      // Auto-return to default
+      // Auto-navigate to manual form after 1.5s
       const timer = setTimeout(() => {
-        setScreen('default');
-      }, 3000);
+        navigateToManualForm();
+      }, 1500);
 
       return () => clearTimeout(timer);
     }
