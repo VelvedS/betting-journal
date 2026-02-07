@@ -226,6 +226,17 @@ export default function ManualAddBetScreen() {
   const [description, setDescription] = useState(params.description || '');
   const [notes, setNotes] = useState(params.notes || '');
 
+  // Parlay legs
+  const [parlayLegs, setParlayLegs] = useState(() => {
+    if (!params.parlay_legs) return [];
+    try {
+      const legs = JSON.parse(params.parlay_legs);
+      return Array.isArray(legs) ? legs : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Payout
   const computedPayout = calcPayout(wager, odds, oddsFormat);
   const payoutDisplay = formatPayout(computedPayout);
