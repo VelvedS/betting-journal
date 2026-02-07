@@ -44,19 +44,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName },
+      },
+    });
     if (error) return { error: error.message };
-
-    // Insert row into public.users table
-    if (data.user) {
-      const { error: profileError } = await supabase.from('users').insert({
-        id: data.user.id,
-        full_name: fullName,
-        email: email,
-      });
-      if (profileError) return { error: profileError.message };
-    }
-
+    // The database trigger on_auth_user_created auto-creates the public.users row
     return { error: null };
   };
 
