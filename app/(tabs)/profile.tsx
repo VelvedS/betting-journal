@@ -71,12 +71,20 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchStats();
-      return () => {};
-    }, [fetchStats])
-  );
+  // Fetch stats on component mount and when app returns to focus
+  useEffect(() => {
+    fetchStats();
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        fetchStats();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [fetchStats]);
 
   const handleSignOut = async () => {
     await signOut();
