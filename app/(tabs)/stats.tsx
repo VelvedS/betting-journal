@@ -134,58 +134,96 @@ export default function StatsScreen() {
 
         {/* Summary Cards - Row 1 */}
         <Animated.View style={[styles.summaryRow, { opacity: fadeAnim }]}>
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, { overflow: 'hidden' }]}>
             <View style={styles.iconContainer}>
               <Ionicons name="trending-up" size={20} color="#10B981" />
             </View>
-            <Text style={styles.summaryLabel}>WINS</Text>
-            <Text style={styles.summaryValue}>{wins}</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>WINS</Text>
+            <Text
+              style={[styles.summaryValue, { fontSize: getResponsiveFontSize(formatWholeNumber(wins)) }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {formatWholeNumber(wins)}
+            </Text>
           </View>
 
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, { overflow: 'hidden' }]}>
             <View style={styles.iconContainer}>
               <Ionicons name="trending-down" size={20} color="#EF4444" />
             </View>
-            <Text style={styles.summaryLabel}>LOSSES</Text>
-            <Text style={styles.summaryValue}>{losses}</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>LOSSES</Text>
+            <Text
+              style={[styles.summaryValue, { fontSize: getResponsiveFontSize(formatWholeNumber(losses)) }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {formatWholeNumber(losses)}
+            </Text>
           </View>
 
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, { overflow: 'hidden' }]}>
             <View style={styles.iconContainer}>
               <Ionicons name="document-text-outline" size={20} color={getValueColor(netPL)} />
             </View>
-            <Text style={styles.summaryLabel}>NET P/L</Text>
-            <Text style={[styles.summaryValue, { color: getValueColor(netPL) }]}>
-              {formatNetPL(netPL)}
+            <Text style={styles.summaryLabel} numberOfLines={1}>NET P/L</Text>
+            <Text
+              style={[styles.summaryValue, { color: getValueColor(netPL), fontSize: getResponsiveFontSize(formatPL(netPL)) }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {formatPL(netPL)}
             </Text>
           </View>
         </Animated.View>
 
         {/* Summary Cards - Row 2 */}
         <Animated.View style={[styles.summaryRow, { opacity: fadeAnim }]}>
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, { overflow: 'hidden' }]}>
             <View style={styles.iconContainer}>
               <Ionicons name="cash-outline" size={20} color="#10B981" />
             </View>
-            <Text style={styles.summaryLabel}>WAGERED</Text>
-            <Text style={styles.summaryValue}>${totalWagered}</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>WAGERED</Text>
+            <Text
+              style={[styles.summaryValue, { fontSize: getResponsiveFontSize(formatCurrency(totalWagered)) }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {formatCurrency(totalWagered)}
+            </Text>
           </View>
 
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, { overflow: 'hidden' }]}>
             <View style={styles.iconContainer}>
               <Ionicons name="checkmark-circle-outline" size={20} color="#10B981" />
             </View>
-            <Text style={styles.summaryLabel}>WIN RATE</Text>
-            <Text style={styles.summaryValue}>{winRate}%</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>WIN RATE</Text>
+            <Text
+              style={[styles.summaryValue, { fontSize: getResponsiveFontSize(formatPercent(winRateValue)) }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {formatPercent(winRateValue)}
+            </Text>
           </View>
 
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, { overflow: 'hidden' }]}>
             <View style={styles.iconContainer}>
-              <Ionicons name="bar-chart-outline" size={20} color={getValueColor(parseFloat(roi))} />
+              <Ionicons name="bar-chart-outline" size={20} color={getValueColor(roiValue)} />
             </View>
-            <Text style={styles.summaryLabel}>ROI</Text>
-            <Text style={[styles.summaryValue, { color: getValueColor(parseFloat(roi)) }]}>
-              {formatROI(roi)}
+            <Text style={styles.summaryLabel} numberOfLines={1}>ROI</Text>
+            <Text
+              style={[styles.summaryValue, { color: getValueColor(roiValue), fontSize: getResponsiveFontSize(formatPercent(roiValue, true)) }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {formatPercent(roiValue, true)}
             </Text>
           </View>
         </Animated.View>
