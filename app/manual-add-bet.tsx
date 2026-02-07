@@ -343,6 +343,21 @@ export default function ManualAddBetScreen() {
     switch (oddsFormat) { case 'american': return '+150 or -110'; case 'decimal': return '2.50'; case 'fractional': return '3/2'; default: return '+150 or -110'; }
   };
   const toggleTag = (tag: string) => { setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]); };
+
+  // Parlay legs helpers
+  const addParlayLeg = () => {
+    setParlayLegs([...parlayLegs, { description: '', odds: '', status: 'pending' }]);
+  };
+
+  const updateParlayLeg = (index: number, field: 'description' | 'odds' | 'status', value: string) => {
+    const updated = [...parlayLegs];
+    updated[index] = { ...updated[index], [field]: value };
+    setParlayLegs(updated);
+  };
+
+  const removeParlayLeg = (index: number) => {
+    setParlayLegs(parlayLegs.filter((_, i) => i !== index));
+  };
   const handleSaveBet = async () => {
     const finalStatus = status || 'pending';
     const sportsbook = isPlatformOther ? customPlatform : selectedPlatform;
