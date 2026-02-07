@@ -123,16 +123,16 @@ export default function ProfileScreen() {
           {/* Stats Section */}
           <View style={styles.statsSection}>
             <View style={styles.statColumn}>
-              <Text style={styles.statValue}>{loading ? '—' : totalBets}</Text>
+              <Text style={styles.statValue}>{loading ? '—' : formatWholeNumber(totalBets || 0)}</Text>
               <Text style={styles.statLabel}>TOTAL BETS</Text>
             </View>
             <View style={styles.statColumn}>
-              <Text style={styles.statValue}>{loading ? '—' : formatWinRate(winRate)}</Text>
+              <Text style={styles.statValue}>{loading ? '—' : formatPercent(winRate || 0)}</Text>
               <Text style={styles.statLabel}>WIN RATE</Text>
             </View>
             <View style={styles.statColumn}>
               <Text style={[styles.statValue, { color: profitColor }]}>
-                {loading ? '—' : formatProfit(profit)}
+                {loading ? '—' : formatCompactCurrency(profit || 0)}
               </Text>
               <Text style={styles.statLabel}>PROFIT</Text>
             </View>
