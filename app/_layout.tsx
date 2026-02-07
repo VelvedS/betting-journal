@@ -19,6 +19,7 @@ export default function RootLayout() {
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="preferences" options={{ headerShown: false }} />
         <Stack.Screen name="help-support" options={{ headerShown: false }} />
+        <Stack.Screen name="manual-add-bet" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />
