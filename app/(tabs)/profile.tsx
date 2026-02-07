@@ -194,7 +194,7 @@ export default function ProfileScreen() {
               <Text style={styles.menuTitle}>Preferences</Text>
               <Text style={styles.menuDescription}>App settings & privacy</Text>
             </View>
-            <Iconicon name="chevron-forward" size={20} color="#9B9B9B" />
+            <Ionicons name="chevron-forward" size={20} color="#9B9B9B" />
           </TouchableOpacity>
 
           {/* Help & Support */}
