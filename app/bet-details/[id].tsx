@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,186 +6,174 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
+  ActivityIndicator,
+  Animated,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 
-interface ParlayLeg {
-  pick: string;
-  odds: string;
-  status: 'WIN' | 'LOSS' | 'PENDING';
-}
+type BetStatus = 'pending' | 'won' | 'lost' | 'void';
 
-interface BetDetails {
-  id: string;
-  platform: string;
-  status: 'WIN' | 'LOSS' | 'PENDING';
-  betType: string;
-  wager: number;
-  payout: number;
-  roi: number;
-  date: string;
-  legs?: ParlayLeg[];
-  pick?: string;
-  notes: string;
-}
-
-const allBetDetails: { [key: string]: BetDetails } = {
-  '0001': {
-    id: '#0001',
-    platform: 'DraftKings',
-    status: 'WIN',
-    betType: 'Parlay (3 legs)',
-    wager: 50,
-    payout: 425,
-    roi: 750,
-    date: 'January 25, 2026, 3:45 PM',
-    legs: [
-      { pick: 'Lakers ML', odds: '+120', status: 'WIN' },
-      { pick: 'Warriors -5.5', odds: '-110', status: 'WIN' },
-      { pick: 'Celtics Over 215.5', odds: '-115', status: 'WIN' },
-    ],
-    notes: 'Feeling confident about this parlay. Lakers have been on a hot streak, and Warriors matchup looks favorable. Celtics games usually go over.',
-  },
-  '0002': {
-    id: '#0002',
-    platform: 'Kalshi',
-    status: 'PENDING',
-    betType: 'Spread',
-    wager: 100,
-    payout: 190,
-    roi: 90,
-    date: 'January 25, 2026, 1:20 PM',
-    pick: 'Trump Yes -150',
-    notes: 'Political spread bet. Feeling good about this one based on recent polling data.',
-  },
-  '0003': {
-    id: '#0003',
-    platform: 'PrizePicks',
-    status: 'LOSS',
-    betType: 'Over/Under',
-    wager: 25,
-    payout: 47.5,
-    roi: 90,
-    date: 'January 24, 2026, 8:30 PM',
-    pick: 'LeBron Over 27.5 pts',
-    notes: 'LeBron has been averaging 30+ lately but had an off night.',
-  },
-  '0004': {
-    id: '#0004',
-    platform: 'DraftKings',
-    status: 'WIN',
-    betType: 'Moneyline',
-    wager: 75,
-    payout: 142.5,
-    roi: 90,
-    date: 'January 23, 2026, 6:15 PM',
-    pick: 'Chiefs ML -175',
-    notes: 'Chiefs at home, should be a comfortable win.',
-  },
-  '0005': {
-    id: '#0005',
-    platform: 'FanDuel',
-    status: 'LOSS',
-    betType: 'Parlay (2 legs)',
-    wager: 40,
-    payout: 120,
-    roi: 200,
-    date: 'January 22, 2026, 4:00 PM',
-    legs: [
-      { pick: 'Knicks ML', odds: '-130', status: 'WIN' },
-      { pick: 'Bucks -3.5', odds: '-110', status: 'LOSS' },
-    ],
-    notes: 'Knicks came through but Bucks couldn\'t cover. Tough break.',
-  },
-  '0006': {
-    id: '#0006',
-    platform: 'BetMGM',
-    status: 'WIN',
-    betType: 'Spread',
-    wager: 60,
-    payout: 114,
-    roi: 90,
-    date: 'December 28, 2025, 2:30 PM',
-    pick: 'Bills -7.5 -110',
-    notes: 'Bills defense has been dominant at home. Easy cover.',
-  },
-  '0007': {
-    id: '#0007',
-    platform: 'Caesars',
-    status: 'WIN',
-    betType: 'Over/Under',
-    wager: 85,
-    payout: 161.5,
-    roi: 90,
-    date: 'December 25, 2025, 7:45 PM',
-    pick: 'Lakers/Warriors Over 230.5',
-    notes: 'Christmas Day games always go over. Both teams playing fast.',
-  },
-  '0008': {
-    id: '#0008',
-    platform: 'DraftKings',
-    status: 'LOSS',
-    betType: 'Parlay (4 legs)',
-    wager: 30,
-    payout: 450,
-    roi: 1400,
-    date: 'December 20, 2025, 12:00 PM',
-    legs: [
-      { pick: '49ers ML', odds: '-140', status: 'WIN' },
-      { pick: 'Eagles -3', odds: '-110', status: 'LOSS' },
-      { pick: 'Ravens ML', odds: '-200', status: 'WIN' },
-      { pick: 'Bengals +7', odds: '-105', status: 'WIN' },
-    ],
-    notes: 'Went big on this one. Eagles let me down but the other 3 hit.',
-  },
+const getStatusStyling = (status: string) => {
+  switch (status) {
+    case 'won':
+      return {
+        bgColor: '#E8F8F0',
+        textColor: '#2DC672',
+        iconName: 'trending-up' as const,
+        iconBg: '#C6F0DC',
+        label: 'Win',
+      };
+    case 'lost':
+      return {
+        bgColor: '#FFECEC',
+        textColor: '#E85D5D',
+        iconName: 'trending-down' as const,
+        iconBg: '#FCA5A5',
+        label: 'Loss',
+      };
+    case 'void':
+      return {
+        bgColor: '#F5F5F5',
+        textColor: '#999999',
+        iconName: 'ban' as const,
+        iconBg: '#E5E5E5',
+        label: 'Void',
+      };
+    case 'pending':
+    default:
+      return {
+        bgColor: '#FFF5E0',
+        textColor: '#F5A623',
+        iconName: 'time' as const,
+        iconBg: '#FDE68A',
+        label: 'Pending',
+      };
+  }
 };
+
+function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: boolean; onPress: () => void }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, { toValue: 0.93, useNativeDriver: true, tension: 300, friction: 10 }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 300, friction: 10 }).start();
+  };
+
+  const getStyles = () => {
+    if (!selected) return { bg: '#F0F0F0', text: '#1A1A1A', border: '#F0F0F0', bw: 0 };
+    switch (value) {
+      case 'pending': return { bg: 'transparent', text: '#2DC672', border: '#2DC672', bw: 1 };
+      case 'won': return { bg: '#2DC672', text: '#FFFFFF', border: '#2DC672', bw: 0 };
+      case 'lost': return { bg: '#E85D5D', text: '#FFFFFF', border: '#E85D5D', bw: 0 };
+      case 'void': return { bg: '#999999', text: '#FFFFFF', border: '#999999', bw: 0 };
+    }
+  };
+
+  const s = getStyles();
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[styles.updatePill, { backgroundColor: s.bg, borderColor: s.border, borderWidth: s.bw }]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.updatePillText, { color: s.text }]}>
+          {value.charAt(0).toUpperCase() + value.slice(1)}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 export default function BetDetailsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { id } = useLocalSearchParams();
-  
-  const betId = typeof id === 'string' ? id : '0001';
-  const bet = allBetDetails[betId];
+  const [bet, setBet] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [showStatusUpdate, setShowStatusUpdate] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  if (!bet) {
+  const betId = typeof id === 'string' ? id : '';
+
+  const fetchBet = useCallback(async () => {
+    if (!betId) return;
+    const { data, error } = await supabase
+      .from('bets')
+      .select('*')
+      .eq('id', betId)
+      .single();
+    if (data) setBet(data);
+    setLoading(false);
+  }, [betId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchBet();
+    }, [fetchBet])
+  );
+
+  const handleUpdateStatus = async (newStatus: BetStatus) => {
+    if (!bet) return;
+    setUpdatingStatus(true);
+    const { error } = await supabase
+      .from('bets')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', bet.id);
+    if (error) {
+      console.error('Failed to update status:', error);
+      Alert.alert('Error', 'Failed to update status. Please try again.');
+    } else {
+      setBet({ ...bet, status: newStatus });
+      setShowStatusUpdate(false);
+    }
+    setUpdatingStatus(false);
+  };
+
+  if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Bet not found</Text>
+        <StatusBar style="dark" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6366F1" />
+        </View>
       </SafeAreaView>
     );
   }
 
-  // Get status styling
-  const getStatusStyling = () => {
-    switch (bet.status) {
-      case 'WIN':
-        return {
-          bgColor: '#E8F8F0',
-          textColor: '#10B981',
-          iconName: 'trending-up' as const,
-          iconBg: '#C6F0DC',
-        };
-      case 'LOSS':
-        return {
-          bgColor: '#FEE2E2',
-          textColor: '#EF4444',
-          iconName: 'trending-down' as const,
-          iconBg: '#FCA5A5',
-        };
-      case 'PENDING':
-        return {
-          bgColor: '#FEF3C7',
-          textColor: '#F59E0B',
-          iconName: 'time' as const,
-          iconBg: '#FDE68A',
-        };
-    }
-  };
+  if (!bet) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="dark" />
+        <View style={styles.loadingContainer}>
+          <Text style={{ fontSize: 16, color: '#6B6B6B' }}>Bet not found</Text>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
+            <Text style={{ fontSize: 16, color: '#6366F1', fontWeight: '600' }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  const statusStyle = getStatusStyling();
-  const isParlay = bet.betType.toLowerCase().includes('parlay');
+  const statusStyle = getStatusStyling(bet.status);
+  const betType = bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : '';
+  const roiPct = bet.wager > 0 ? (((bet.potential_payout || 0) - bet.wager) / bet.wager * 100).toFixed(0) : '0';
+  const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+  }) : '';
+  const isParlay = betType.toLowerCase().includes('parlay');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -211,15 +199,44 @@ export default function BetDetailsScreen() {
             <View>
               <Text style={styles.statusLabel}>STATUS</Text>
               <Text style={[styles.statusValue, { color: statusStyle.textColor }]}>
-                {bet.status === 'WIN' ? 'Win' : bet.status === 'LOSS' ? 'Loss' : 'Pending'}
+                {statusStyle.label}
               </Text>
-              <Text style={styles.statusDate}>{bet.date}</Text>
+              <Text style={styles.statusDate}>{dateStr}</Text>
             </View>
             <View style={[styles.statusIconCircle, { backgroundColor: statusStyle.iconBg }]}>
               <Ionicons name={statusStyle.iconName} size={24} color={statusStyle.textColor} />
             </View>
           </View>
         </View>
+
+        {/* Update Status Button */}
+        <TouchableOpacity
+          style={styles.updateStatusButton}
+          onPress={() => setShowStatusUpdate(!showStatusUpdate)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="swap-horizontal" size={16} color="#6366F1" />
+          <Text style={styles.updateStatusText}>Update Status</Text>
+        </TouchableOpacity>
+
+        {/* Status Update Pills */}
+        {showStatusUpdate && (
+          <View style={styles.updateStatusContainer}>
+            <View style={styles.updatePillsRow}>
+              {(['pending', 'won', 'lost', 'void'] as BetStatus[]).map((s) => (
+                <StatusPill
+                  key={s}
+                  value={s}
+                  selected={bet.status === s}
+                  onPress={() => handleUpdateStatus(s)}
+                />
+              ))}
+            </View>
+            {updatingStatus && (
+              <ActivityIndicator size="small" color="#6366F1" style={{ marginTop: 8 }} />
+            )}
+          </View>
+        )}
 
         {/* Sportsbook & Wager Info Card */}
         <View style={styles.infoCard}>
@@ -228,8 +245,8 @@ export default function BetDetailsScreen() {
               <Ionicons name="logo-usd" size={22} color="#10B981" />
             </View>
             <View style={styles.sportsbookInfo}>
-              <Text style={styles.sportsbookName}>{bet.platform}</Text>
-              <Text style={styles.sportsbookType}>{bet.betType}</Text>
+              <Text style={styles.sportsbookName}>{bet.sportsbook || 'Unknown'}</Text>
+              <Text style={styles.sportsbookType}>{betType}</Text>
             </View>
           </View>
 
@@ -242,60 +259,37 @@ export default function BetDetailsScreen() {
             </View>
             <View style={styles.statColumn}>
               <Text style={styles.statLabel}>PAYOUT</Text>
-              <Text style={styles.statValue}>${bet.payout}</Text>
+              <Text style={styles.statValue}>${(bet.potential_payout || 0).toFixed(2)}</Text>
             </View>
             <View style={[styles.statColumn, styles.statColumnRight]}>
               <Text style={styles.statLabel}>ROI</Text>
-              <Text style={styles.roiValue}>+{bet.roi}%</Text>
+              <Text style={styles.roiValue}>+{roiPct}%</Text>
             </View>
           </View>
         </View>
 
-        {/* Parlay Legs Card (conditional) */}
-        {isParlay && bet.legs && (
-          <View style={styles.parlayCard}>
-            <View style={styles.parlayHeader}>
-              <Text style={styles.parlayTitle}>Parlay Legs</Text>
-              <View style={styles.legsBadge}>
-                <Text style={styles.legsBadgeText}>{bet.legs.length}</Text>
-              </View>
+        {/* Description Card (if exists) */}
+        {bet.description ? (
+          <View style={styles.notesCard}>
+            <View style={styles.notesHeader}>
+              <Ionicons name="baseball-outline" size={20} color="#6366F1" />
+              <Text style={styles.notesTitle}>Pick</Text>
             </View>
-
-            <View style={styles.legsContainer}>
-              {bet.legs.map((leg, index) => {
-                const legStatusStyle =
-                  leg.status === 'WIN'
-                    ? { bgColor: '#D1FAE5', textColor: '#10B981' }
-                    : leg.status === 'LOSS'
-                    ? { bgColor: '#FEE2E2', textColor: '#EF4444' }
-                    : { bgColor: '#FEF3C7', textColor: '#F59E0B' };
-
-                return (
-                  <View key={index} style={styles.legCard}>
-                    <View style={styles.legLeft}>
-                      <Text style={styles.legPick}>{leg.pick}</Text>
-                      <Text style={styles.legOdds}>{leg.odds}</Text>
-                    </View>
-                    <View style={[styles.legBadge, { backgroundColor: legStatusStyle.bgColor }]}>
-                      <Text style={[styles.legBadgeText, { color: legStatusStyle.textColor }]}>
-                        {leg.status}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
+            <Text style={styles.notesText}>{bet.description}</Text>
+            {bet.matchup ? <Text style={[styles.notesText, { marginTop: 4, color: '#9CA3AF' }]}>{bet.matchup}</Text> : null}
           </View>
-        )}
+        ) : null}
 
         {/* Notes Card */}
-        <View style={styles.notesCard}>
-          <View style={styles.notesHeader}>
-            <Ionicons name="document-text-outline" size={20} color="#6366F1" />
-            <Text style={styles.notesTitle}>Notes</Text>
+        {bet.notes ? (
+          <View style={styles.notesCard}>
+            <View style={styles.notesHeader}>
+              <Ionicons name="document-text-outline" size={20} color="#6366F1" />
+              <Text style={styles.notesTitle}>Notes</Text>
+            </View>
+            <Text style={styles.notesText}>{bet.notes}</Text>
           </View>
-          <Text style={styles.notesText}>{bet.notes}</Text>
-        </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -305,6 +299,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -335,7 +334,7 @@ const styles = StyleSheet.create({
   statusBanner: {
     borderRadius: 16,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   statusHeader: {
     flexDirection: 'row',
@@ -364,6 +363,43 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  updateStatusButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  updateStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6366F1',
+  },
+  updateStatusContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
+    elevation: 2,
+    alignItems: 'center',
+  },
+  updatePillsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  updatePill: {
+    borderRadius: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    height: 38,
+    justifyContent: 'center',
+  },
+  updatePillText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   infoCard: {
     backgroundColor: '#FFFFFF',
@@ -431,78 +467,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#10B981',
   },
-  parlayCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
-    elevation: 2,
-  },
-  parlayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  parlayTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  legsBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  legsBadgeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6B6B6B',
-  },
-  legsContainer: {
-    gap: 10,
-  },
-  legCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-  },
-  legLeft: {
-    flex: 1,
-  },
-  legPick: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 4,
-  },
-  legOdds: {
-    fontSize: 13,
-    color: '#6B6B6B',
-  },
-  legBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  legBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
   notesCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 20,
+    marginBottom: 16,
     boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
     elevation: 2,
   },
