@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { formatCompactCurrency, formatPercent, formatWholeNumber } from '@/lib/formatters';
 
 export default function ProfileScreen() {
   const router = useRouter();
