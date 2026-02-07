@@ -373,7 +373,12 @@ export default function StatsScreen() {
         {/* Bet Cards List */}
         <View style={styles.betsList}>
           {filteredBets.map((bet) => (
-            <View key={bet.id} style={styles.betCard}>
+            <TouchableOpacity
+              key={bet.id}
+              style={styles.betCard}
+              activeOpacity={0.7}
+              onPress={() => router.push(`/bet-details/${bet.id.replace('#', '')}`)}
+            >
               {/* Header Row */}
               <View style={styles.betHeader}>
                 <View style={styles.betHeaderLeft}>
@@ -411,7 +416,7 @@ export default function StatsScreen() {
                 <Text style={styles.betDate}>{bet.date}</Text>
                 <Text style={styles.betId}>{bet.id}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </ScrollView>
