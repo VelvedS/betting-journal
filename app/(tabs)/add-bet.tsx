@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Ani
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
-type ScreenState = 'default' | 'processing' | 'success';
+type ScreenState = 'default' | 'processing' | 'success' | 'error';
 
 export default function AddBetScreen() {
   const router = useRouter();
