@@ -407,22 +407,21 @@ export default function ManualAddBetScreen() {
         await supabase.from('bet_tags').insert(selectedTags.map(tag => ({ bet_id: data.id, tag })));
       }
 
-      // Save parlay legs if provided via AI scan
-      if (params.parlay_legs && data?.id) {
+      // Save parlay legs if betType is parlay
+      if (betType === 'parlay' && parlayLegs.length > 0 && data?.id) {
         try {
-          const legs = JSON.parse(params.parlay_legs);
-          if (Array.isArray(legs) && legs.length > 0) {
-            await supabase.from('parlay_legs').insert(
-              legs.map((leg: any, idx: number) => ({
-                bet_id: data.id,
-                pick: leg.pick || '',
-                odds: leg.odds || '',
-                status: leg.status || 'pending',
-                leg_number: idx + 1,
-              }))
-            );
-          }
-        } catch { /* parlay_legs parse failed, skip */ }
+          await supabase.from('parlay_legs').insert(
+            parlayLegs.map((leg: any, idx: number) => ({
+              bet_id: data.id,
+              pick: leg.description || '',
+              odds: leg.odds || '',
+              status: leg.status || 'pending',
+              leg_number: idx + 1,
+            }))
+          );
+        } catch (err) {
+          console.error('Failed to save parlay legs:', err);
+        }
       }
 
       setIsSaving(false);
