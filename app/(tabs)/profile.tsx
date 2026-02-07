@@ -3,12 +3,15 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } fr
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { signOut, user } = useAuth();
 
-  const handleSignOut = () => {
-    router.replace('/');
+  const handleSignOut = async () => {
+    await signOut();
+    // AuthGuard in _layout.tsx handles navigation back to login
   };
 
   return (
@@ -29,8 +32,8 @@ export default function ProfileScreen() {
               <Ionicons name="person-outline" size={32} color="#6B6B6B" />
             </View>
             <View style={styles.userTextContainer}>
-              <Text style={styles.userName}>John Trader</Text>
-              <Text style={styles.userEmail}>john.trader@email.com</Text>
+              <Text style={styles.userName}>{user?.user_metadata?.full_name || 'John Trader'}</Text>
+              <Text style={styles.userEmail}>{user?.email || 'john.trader@email.com'}</Text>
             </View>
           </View>
 
