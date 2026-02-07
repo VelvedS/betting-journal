@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
+import { formatCurrency, formatPL, formatPercent, formatWholeNumber } from '@/lib/formatters';
 
 type FilterType = 'All' | 'Wins' | 'Losses' | 'Pending';
 
