@@ -171,12 +171,12 @@ export default function HomeScreen() {
           <View style={styles.profitValueRow}>
             {hasBets ? (
               <>
-                <Text style={[styles.profitValue, { color: totalProfit >= 0 ? '#10B981' : '#EF4444' }]}>
-                  {formatPL(totalProfit)}
+                <Text style={[styles.profitValue, { color: totalProfit >= 0 ? '#2DC672' : '#E85D5D' }]}>
+                  {formatCurrency(totalProfit)}
                 </Text>
                 <View style={styles.percentageContainer}>
-                  <Ionicons name={totalProfit >= 0 ? "trending-up" : "trending-down"} size={20} color={totalProfit >= 0 ? "#10B981" : "#EF4444"} />
-                  <Text style={[styles.percentageText, { color: totalProfit >= 0 ? '#10B981' : '#EF4444' }]}>
+                  <Ionicons name={totalProfit >= 0 ? "trending-up" : "trending-down"} size={20} color={totalProfit >= 0 ? "#2DC672" : "#E85D5D"} />
+                  <Text style={[styles.percentageText, { color: totalProfit >= 0 ? '#2DC672' : '#E85D5D' }]}>
                     {formatPercent(totalWagered > 0 ? (totalProfit / totalWagered) * 100 : 0, true)}
                   </Text>
                 </View>
