@@ -93,8 +93,104 @@ export default function AddBetScreen() {
     }
   }, [screen]);
 
+  const callExtractBetDetailsFunction = async () => {
+    if (!uploadedImageUrl || !user) {
+      setErrorMessage('Failed to process image. Please try again.');
+      setScreen('error');
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setErrorMessage('Authentication failed. Please log in again.');
+        setScreen('error');
+        return;
+      }
+
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/extract-bet-details`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            image_url: uploadedImageUrl,
+            user_id: session.user.id
+          })
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        setExtractedData(result.data);
+        setScreen('success');
+      } else {
+        setErrorMessage(result.error || 'Failed to extract bet details. Please try again.');
+        setScreen('error');
+      }
+    } catch (err) {
+      console.error('Error calling Edge Function:', err);
+      setErrorMessage('An error occurred while processing your ticket. Please try again.');
+      setScreen('error');
+    }
+  };
+
+  const navigateToManualForm = () => {
+    if (!extractedData) {
+      router.push('/manual-add-bet');
+      return;
+    }
+
+    router.push({
+      pathname: '/manual-add-bet',
+      params: {
+        sportsbook: extractedData.sportsbook || '',
+        bet_type: extractedData.bet_type || '',
+        sport: extractedData.sport || '',
+        matchup: extractedData.matchup || '',
+        description: extractedData.description || '',
+        odds: extractedData.odds || '',
+        odds_format: extractedData.odds_format || 'american',
+        wager: extractedData.wager?.toString() || '',
+        potential_payout: extractedData.potential_payout?.toString() || '',
+        status: extractedData.status || 'pending',
+        placed_at: extractedData.placed_at || '',
+        notes: extractedData.notes || '',
+        ticket_image_url: uploadedImageUrl,
+        parlay_legs: extractedData.parlay_legs ? JSON.stringify(extractedData.parlay_legs) : '',
+        tags: extractedData.tags ? JSON.stringify(extractedData.tags) : '',
+        confidence: extractedData.confidence?.toString() || ''
+      }
+    });
+  };
+
   const handleUploadOrPhoto = () => {
+    // TODO: Implement actual image upload to Supabase Storage
+    // For now, simulate with a demo URL
+    const demoImageUrl = 'https://via.placeholder.com/400x600?text=Betting+Slip';
+    setUploadedImageUrl(demoImageUrl);
     setScreen('processing');
+  };
+
+  const handleRetryUpload = () => {
+    setErrorMessage('');
+    setUploadedImageUrl('');
+    setExtractedData(null);
+    setScreen('default');
+  };
+
+  const handleEnterManually = () => {
+    router.push({
+      pathname: '/manual-add-bet',
+      params: {
+        ticket_image_url: uploadedImageUrl
+      }
+    });
   };
 
   const handleSuccessTap = () => {
