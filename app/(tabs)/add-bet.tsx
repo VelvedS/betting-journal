@@ -705,4 +705,67 @@ const styles = StyleSheet.create({
     color: '#6B6B6B',
     lineHeight: 19,
   },
+
+  // Error Card
+  errorCard: {
+    backgroundColor: '#FFF0F0',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FFE0E0',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 400,
+  },
+  errorIconContainer: {
+    marginBottom: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorDescription: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#6B6B6B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 28,
+  },
+  errorButtonsContainer: {
+    width: '100%',
+    gap: 12,
+  },
+  errorRetryButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorRetryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  errorManualButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorManualButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
 });
