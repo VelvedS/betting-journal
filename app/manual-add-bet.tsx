@@ -875,6 +875,22 @@ const aiStyles = StyleSheet.create({
   imageRemoveBtn: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
   retakeBtn: { alignItems: 'center', paddingVertical: 10 },
   retakeText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
+  parlayHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  parlayCountBadge: { backgroundColor: '#6C63FF', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+  parlayCountText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
+  parlayLegCard: { backgroundColor: '#F9F9F9', borderRadius: 10, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  parlayLegContent: { flex: 1 },
+  parlayLegInput: { marginBottom: 8 },
+  parlayLegStatusRow: { flexDirection: 'row', gap: 6 },
+  parlayStatusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: '#E5E7EB', borderWidth: 1, borderColor: '#E5E7EB' },
+  parlayStatusPending: { backgroundColor: 'transparent', borderColor: '#2DC672' },
+  parlayStatusWon: { backgroundColor: '#2DC672', borderColor: '#2DC672' },
+  parlayStatusLost: { backgroundColor: '#E85D5D', borderColor: '#E85D5D' },
+  parlayStatusText: { fontSize: 12, fontWeight: '600', color: '#4A4A4A' },
+  parlayStatusTextActive: { color: '#FFFFFF' },
+  parlayDeleteBtn: { padding: 4 },
+  addLegButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#6366F1', borderStyle: 'dashed' },
+  addLegText: { fontSize: 14, fontWeight: '600', color: '#6366F1' },
 });
 
 // ── Date picker styles ──
