@@ -157,7 +157,12 @@ export default function DashboardScreen() {
           </View>
 
           {sampleBets.map((bet) => (
-            <View key={bet.id} style={styles.activityCard}>
+            <TouchableOpacity
+              key={bet.id}
+              style={styles.activityCard}
+              activeOpacity={0.7}
+              onPress={() => router.push(`/bet-details/${bet.id.replace('#', '')}`)}
+            >
               {/* Header Row */}
               <View style={styles.activityHeader}>
                 <View style={styles.activityHeaderLeft}>
@@ -195,7 +200,7 @@ export default function DashboardScreen() {
                 <Text style={styles.timestamp}>{bet.timestamp}</Text>
                 <Text style={styles.betId}>{bet.id}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 
