@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,20 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 
 export default function SignupScreen() {
-  const { signUp } = useAuth();
+  const { signUp, session, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && session) {
+      router.replace('/(tabs)');
+    }
+  }, [session, authLoading]);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +52,7 @@ export default function SignupScreen() {
     if (error) {
       setErrorMsg(error);
     }
-    // On success, AuthGuard in _layout.tsx handles navigation
+    // On success, useEffect above handles navigation via session change
   };
 
   return (
