@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Animated, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import * as ImagePicker from 'expo-image-picker';
 
 type ScreenState = 'default' | 'processing' | 'success' | 'error';
 
@@ -70,10 +71,10 @@ export default function AddBetScreen() {
         }).start();
       }, 2200);
 
-      // Call Edge Function to extract bet details
-      callExtractBetDetailsFunction();
-
       return () => {};
+    } else if (screen === 'processing' && uploadedImageUrl) {
+      // Image uploaded, now call Edge Function
+      callExtractBetDetailsFunction();
     } else if (screen === 'success') {
       // Checkmark pop-in animation
       checkmarkScale.setValue(0);
@@ -91,7 +92,7 @@ export default function AddBetScreen() {
 
       return () => clearTimeout(timer);
     }
-  }, [screen]);
+  }, [screen, uploadedImageUrl]);
 
   const callExtractBetDetailsFunction = async () => {
     if (!uploadedImageUrl || !user) {
@@ -169,12 +170,86 @@ export default function AddBetScreen() {
     });
   };
 
-  const handleUploadOrPhoto = () => {
-    // TODO: Implement actual image upload to Supabase Storage
-    // For now, simulate with a demo URL
-    const demoImageUrl = 'https://via.placeholder.com/400x600?text=Betting+Slip';
-    setUploadedImageUrl(demoImageUrl);
+  const uploadImageToStorage = async (uri: string): Promise<string | null> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return null;
+
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${session.user.id}/${Date.now()}.${ext}`;
+
+      const { data, error } = await supabase.storage
+        .from('betting-slips')
+        .upload(fileName, blob, {
+          contentType: `image/${ext === 'png' ? 'png' : 'jpeg'}`,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('Storage upload error:', error);
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('betting-slips')
+        .getPublicUrl(data.path);
+
+      return urlData.publicUrl;
+    } catch (err) {
+      console.error('Upload error:', err);
+      return null;
+    }
+  };
+
+  const handlePickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (result.canceled) return;
+
+    const uri = result.assets[0].uri;
     setScreen('processing');
+
+    const publicUrl = await uploadImageToStorage(uri);
+    if (!publicUrl) {
+      setErrorMessage('Failed to upload image. Please try again.');
+      setScreen('error');
+      return;
+    }
+
+    setUploadedImageUrl(publicUrl);
+  };
+
+  const handleTakePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (result.canceled) return;
+
+    const uri = result.assets[0].uri;
+    setScreen('processing');
+
+    const publicUrl = await uploadImageToStorage(uri);
+    if (!publicUrl) {
+      setErrorMessage('Failed to upload image. Please try again.');
+      setScreen('error');
+      return;
+    }
+
+    setUploadedImageUrl(publicUrl);
   };
 
   const handleRetryUpload = () => {
@@ -362,7 +437,7 @@ export default function AddBetScreen() {
         </View>
 
         {/* Card 1 - Upload Betting Slip (Primary Action) */}
-        <TouchableOpacity style={styles.uploadCard} activeOpacity={0.7} onPress={handleUploadOrPhoto}>
+        <TouchableOpacity style={styles.uploadCard} activeOpacity={0.7} onPress={handlePickImage}>
           <View style={styles.uploadIconCircle}>
             <Ionicons name="cloud-upload-outline" size={32} color="#6B6B6B" />
           </View>
@@ -373,7 +448,7 @@ export default function AddBetScreen() {
         </TouchableOpacity>
 
         {/* Card 2 - Take a Photo (Secondary Action) */}
-        <TouchableOpacity style={styles.compactCard} activeOpacity={0.7} onPress={handleUploadOrPhoto}>
+        <TouchableOpacity style={styles.compactCard} activeOpacity={0.7} onPress={handleTakePhoto}>
           <View style={styles.compactIconCircle}>
             <Ionicons name="camera-outline" size={24} color="#6B6B6B" />
           </View>
