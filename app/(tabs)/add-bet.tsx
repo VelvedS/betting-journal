@@ -70,11 +70,6 @@ export default function AddBetScreen() {
           useNativeDriver: true,
         }).start();
       }, 2200);
-
-      return () => {};
-    } else if (screen === 'processing' && uploadedImageUrl) {
-      // Image uploaded, now call Edge Function
-      callExtractBetDetailsFunction();
     } else if (screen === 'success') {
       // Checkmark pop-in animation
       checkmarkScale.setValue(0);
@@ -92,7 +87,14 @@ export default function AddBetScreen() {
 
       return () => clearTimeout(timer);
     }
-  }, [screen, uploadedImageUrl]);
+  }, [screen]);
+
+  // Separate effect: call Edge Function when image URL is set during processing
+  useEffect(() => {
+    if (screen === 'processing' && uploadedImageUrl) {
+      callExtractBetDetailsFunction();
+    }
+  }, [uploadedImageUrl]);
 
   const callExtractBetDetailsFunction = async () => {
     if (!uploadedImageUrl || !user) {
