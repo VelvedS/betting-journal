@@ -221,7 +221,7 @@ export default function ManualAddBetScreen() {
     try { return JSON.parse(params.tags); } catch { return []; }
   });
   const [wager, setWager] = useState(params.wager || '');
-  const [odds, setOdds] = useState(params.odds || '');
+  const [odds, setOdds] = useState('');
   const [matchup, setMatchup] = useState(params.matchup || '');
   const [description, setDescription] = useState(params.description || '');
   const [notes, setNotes] = useState(params.notes || '');
@@ -238,10 +238,70 @@ export default function ManualAddBetScreen() {
   });
 
   // Payout
-  const computedPayout = calcPayout(wager, odds, oddsFormat);
-  const payoutDisplay = formatPayout(computedPayout);
-  const aiPayout = params.potential_payout ? parseFloat(params.potential_payout) : null;
-  const showAiPayoutNote = aiPayout !== null && Math.abs(aiPayout - computedPayout) > 1 && computedPayout > 0;
+  const [potentialPayout, setPotentialPayout] = useState('0.00');
+
+  useEffect(() => {
+    const wagerNum = parseFloat(wager);
+    const oddsStr = odds?.trim();
+    if (!wagerNum || wagerNum <= 0 || !oddsStr) {
+      setPotentialPayout('0.00');
+      return;
+    }
+    let payout = 0;
+    if (oddsFormat === 'american' || oddsFormat === 'American') {
+      const oddsNum = parseFloat(oddsStr.replace('+', ''));
+      if (isNaN(oddsNum) || oddsNum === 0) {
+        setPotentialPayout('0.00');
+        return;
+      }
+      if (oddsNum > 0) {
+        payout = wagerNum + (wagerNum * (oddsNum / 100));
+      } else {
+        payout = wagerNum + (wagerNum * (100 / Math.abs(oddsNum)));
+      }
+    } else if (oddsFormat === 'decimal' || oddsFormat === 'Decimal') {
+      const oddsNum = parseFloat(oddsStr);
+      if (isNaN(oddsNum) || oddsNum <= 0) {
+        setPotentialPayout('0.00');
+        return;
+      }
+      payout = wagerNum * oddsNum;
+    } else if (oddsFormat === 'fractional' || oddsFormat === 'Fractional') {
+      const parts = oddsStr.split('/');
+      if (parts.length !== 2) {
+        setPotentialPayout('0.00');
+        return;
+      }
+      const numerator = parseFloat(parts[0]);
+      const denominator = parseFloat(parts[1]);
+      if (isNaN(numerator) || isNaN(denominator) || denominator === 0) {
+        setPotentialPayout('0.00');
+        return;
+      }
+      payout = wagerNum + (wagerNum * (numerator / denominator));
+    }
+    setPotentialPayout(payout.toFixed(2));
+  }, [wager, odds, oddsFormat]);
+
+  // On mount: if AI provided wager + potential_payout, back-calculate American odds
+  useEffect(() => {
+    const wagerNum = parseFloat(params.wager || '');
+    const payoutNum = parseFloat(params.potential_payout || '');
+    if (wagerNum > 0 && payoutNum > wagerNum) {
+      const profit = payoutNum - wagerNum;
+      let americanOdds: string;
+      if (profit >= wagerNum) {
+        americanOdds = '+' + Math.round((profit / wagerNum) * 100);
+      } else {
+        americanOdds = '-' + Math.round((wagerNum / profit) * 100);
+      }
+      setOddsFormat('american');
+      setOdds(americanOdds);
+    } else if (params.odds) {
+      // No payout to back-calculate from — fall back to AI-extracted odds
+      setOdds(params.odds);
+    }
+  }, []);
 
   // Date state
   const [placedAt, setPlacedAt] = useState<Date | null>(() => {
@@ -376,7 +436,7 @@ export default function ManualAddBetScreen() {
     };
 
     const wagerNum = parseFloat(wager) || 0;
-    const payoutNum = computedPayout;
+    const payoutNum = parseFloat(potentialPayout) || 0;
     const roiPercentage = wagerNum > 0 ? ((payoutNum - wagerNum) / wagerNum) * 100 : 0;
 
     const payload = {
@@ -605,11 +665,8 @@ export default function ManualAddBetScreen() {
           </View>
           <View style={[styles.currencyInputContainer, styles.readOnlyInput]}>
             <Text style={styles.currencySymbol}>$</Text>
-            <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" editable={false} value={payoutDisplay} />
+            <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" editable={false} value={potentialPayout} />
           </View>
-          {showAiPayoutNote && (
-            <Text style={aiStyles.payoutNote}>AI estimate: ${aiPayout!.toFixed(2)} — recalculated: ${payoutDisplay}</Text>
-          )}
         </View>
 
         {/* Field 9 - Status */}
