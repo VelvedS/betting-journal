@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Animated, Platform } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type ScreenState = 'default' | 'processing' | 'success' | 'error';
 
@@ -112,13 +112,24 @@ export default function AddBetScreen() {
       }
 
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      console.log('Calling Edge Function with URL:', supabaseUrl + '/functions/v1/extract-bet-details');
+      console.log('Image URL being sent:', uploadedImageUrl);
+      console.log('Session token:', session.access_token ? 'Present' : 'Missing');
+      console.log('Session user ID:', session.user.id);
+      console.log('Session user email:', session.user.email);
+      console.log('Access token first 20 chars:', session.access_token.substring(0, 20));
+      console.log('Token expires at:', session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'undefined');
+      console.log('Current time:', new Date().toISOString());
+      console.log('Apikey first 20 chars:', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20));
+
       const response = await fetch(
         `${supabaseUrl}/functions/v1/extract-bet-details`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
           },
           body: JSON.stringify({
             image_url: uploadedImageUrl,
@@ -127,7 +138,18 @@ export default function AddBetScreen() {
         }
       );
 
+      console.log('Edge Function response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('Edge Function error response:', errorText);
+        setErrorMessage('Failed to extract bet details. Please try again.');
+        setScreen('error');
+        return;
+      }
+
       const result = await response.json();
+      console.log('Edge Function response data:', JSON.stringify(result));
 
       if (result.success) {
         setExtractedData(result.data);
@@ -137,6 +159,7 @@ export default function AddBetScreen() {
         setScreen('error');
       }
     } catch (err) {
+      console.log('Edge Function error:', err instanceof Error ? err.message : String(err));
       console.error('Error calling Edge Function:', err);
       setErrorMessage('An error occurred while processing your ticket. Please try again.');
       setScreen('error');
@@ -180,13 +203,12 @@ export default function AddBetScreen() {
       const response = await fetch(uri);
       const blob = await response.blob();
 
-      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `${session.user.id}/${Date.now()}.${ext}`;
+      const fileName = `${session.user.id}/${Date.now()}.jpg`;
 
       const { data, error } = await supabase.storage
         .from('betting-slips')
         .upload(fileName, blob, {
-          contentType: `image/${ext === 'png' ? 'png' : 'jpeg'}`,
+          contentType: 'image/jpeg',
           upsert: false,
         });
 
@@ -211,6 +233,8 @@ export default function AddBetScreen() {
       mediaTypes: ['images'],
       allowsEditing: false,
       quality: 0.8,
+      base64: false,
+      exif: false,
     });
 
     if (result.canceled) return;
@@ -235,8 +259,11 @@ export default function AddBetScreen() {
     }
 
     const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
       allowsEditing: false,
       quality: 0.8,
+      base64: false,
+      exif: false,
     });
 
     if (result.canceled) return;

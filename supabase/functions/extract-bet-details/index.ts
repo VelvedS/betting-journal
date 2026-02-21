@@ -1,5 +1,6 @@
 // REQUIRED: Set ANTHROPIC_API_KEY in Supabase Dashboard > Edge Functions > Secrets
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,22 +22,38 @@ serve(async (req) => {
       )
     }
 
-    // Download image from Supabase Storage
-    const imageResponse = await fetch(image_url, {
-      headers: { 'Authorization': req.headers.get('Authorization') || '' }
-    })
+    // Download image from Supabase Storage using admin client (supports private buckets)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-    if (!imageResponse.ok) {
+    // Extract file path from the full URL
+    const urlParts = image_url.split('betting-slips/')
+    const filePath = urlParts[urlParts.length - 1]
+
+    const { data: fileData, error: downloadError } = await supabaseAdmin
+      .storage
+      .from('betting-slips')
+      .download(filePath)
+
+    if (downloadError || !fileData) {
       return new Response(
         JSON.stringify({ success: false, error: 'Could not download the image. Please try uploading again.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
-    const imageBuffer = await imageResponse.arrayBuffer()
-    const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)))
-
-    const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
+    const arrayBuffer = await fileData.arrayBuffer()
+    const uint8Array = new Uint8Array(arrayBuffer)
+    let binaryString = ''
+    const chunkSize = 8192
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.subarray(i, i + chunkSize)
+      binaryString += String.fromCharCode.apply(null, Array.from(chunk))
+    }
+    const base64Image = btoa(binaryString)
+    const contentType = fileData.type || 'image/jpeg'
 
     // Call Claude Vision API
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
