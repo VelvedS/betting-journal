@@ -15,6 +15,8 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { formatCurrency, formatPL, formatPercent, formatWholeNumber } from '@/lib/formatters';
+import AnimatedPressable from '@/components/AnimatedPressable';
+import FadeInView from '@/components/FadeInView';
 
 type FilterType = 'All' | 'Wins' | 'Losses' | 'Pending';
 
@@ -130,202 +132,222 @@ export default function StatsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Betting Statistics</Text>
-            <Text style={styles.subtitle}>{subtitleText}</Text>
+        <FadeInView delay={0} direction="bottom">
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>Betting Statistics</Text>
+              <Text style={styles.subtitle}>{subtitleText}</Text>
+            </View>
+            <AnimatedPressable style={styles.filterIconButton} scaleDown={0.9}>
+              <Ionicons name="funnel-outline" size={22} color="#1A1A1A" />
+            </AnimatedPressable>
           </View>
-          <TouchableOpacity style={styles.filterIconButton}>
-            <Ionicons name="funnel-outline" size={22} color="#1A1A1A" />
-          </TouchableOpacity>
-        </View>
+        </FadeInView>
 
         {/* Summary Cards - Row 1 */}
         <Animated.View style={[styles.summaryRow, { opacity: fadeAnim }]}>
-          <View style={styles.summaryCard}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="trending-up" size={20} color="#10B981" />
+          <FadeInView delay={80} direction="bottom" style={styles.summaryCardFlex}>
+            <View style={styles.summaryCard}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="trending-up" size={20} color="#10B981" />
+              </View>
+              <Text style={styles.summaryLabel} numberOfLines={1}>WINS</Text>
+              <Text
+                style={[styles.summaryValue, { fontSize: getResponsiveFontSize(winsStr) }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {winsStr}
+              </Text>
             </View>
-            <Text style={styles.summaryLabel} numberOfLines={1}>WINS</Text>
-            <Text
-              style={[styles.summaryValue, { fontSize: getResponsiveFontSize(winsStr) }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {winsStr}
-            </Text>
-          </View>
+          </FadeInView>
 
-          <View style={styles.summaryCard}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="trending-down" size={20} color="#EF4444" />
+          <FadeInView delay={140} direction="bottom" style={styles.summaryCardFlex}>
+            <View style={styles.summaryCard}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="trending-down" size={20} color="#EF4444" />
+              </View>
+              <Text style={styles.summaryLabel} numberOfLines={1}>LOSSES</Text>
+              <Text
+                style={[styles.summaryValue, { fontSize: getResponsiveFontSize(lossesStr) }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {lossesStr}
+              </Text>
             </View>
-            <Text style={styles.summaryLabel} numberOfLines={1}>LOSSES</Text>
-            <Text
-              style={[styles.summaryValue, { fontSize: getResponsiveFontSize(lossesStr) }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {lossesStr}
-            </Text>
-          </View>
+          </FadeInView>
 
-          <View style={styles.summaryCard}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="document-text-outline" size={20} color={getValueColor(netPL)} />
+          <FadeInView delay={200} direction="bottom" style={styles.summaryCardFlex}>
+            <View style={styles.summaryCard}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="document-text-outline" size={20} color={getValueColor(netPL)} />
+              </View>
+              <Text style={styles.summaryLabel} numberOfLines={1}>NET P/L</Text>
+              <Text
+                style={[styles.summaryValue, { color: getValueColor(netPL), fontSize: getResponsiveFontSize(netPLStr) }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {netPLStr}
+              </Text>
             </View>
-            <Text style={styles.summaryLabel} numberOfLines={1}>NET P/L</Text>
-            <Text
-              style={[styles.summaryValue, { color: getValueColor(netPL), fontSize: getResponsiveFontSize(netPLStr) }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {netPLStr}
-            </Text>
-          </View>
+          </FadeInView>
         </Animated.View>
 
         {/* Summary Cards - Row 2 */}
         <Animated.View style={[styles.summaryRow, { opacity: fadeAnim }]}>
-          <View style={styles.summaryCard}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="cash-outline" size={20} color="#10B981" />
+          <FadeInView delay={260} direction="bottom" style={styles.summaryCardFlex}>
+            <View style={styles.summaryCard}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="cash-outline" size={20} color="#10B981" />
+              </View>
+              <Text style={styles.summaryLabel} numberOfLines={1}>WAGERED</Text>
+              <Text
+                style={[styles.summaryValue, { fontSize: getResponsiveFontSize(wageredStr) }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {wageredStr}
+              </Text>
             </View>
-            <Text style={styles.summaryLabel} numberOfLines={1}>WAGERED</Text>
-            <Text
-              style={[styles.summaryValue, { fontSize: getResponsiveFontSize(wageredStr) }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {wageredStr}
-            </Text>
-          </View>
+          </FadeInView>
 
-          <View style={styles.summaryCard}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#10B981" />
+          <FadeInView delay={320} direction="bottom" style={styles.summaryCardFlex}>
+            <View style={styles.summaryCard}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="checkmark-circle-outline" size={20} color="#10B981" />
+              </View>
+              <Text style={styles.summaryLabel} numberOfLines={1}>WIN RATE</Text>
+              <Text
+                style={[styles.summaryValue, { fontSize: getResponsiveFontSize(winRateStr) }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {winRateStr}
+              </Text>
             </View>
-            <Text style={styles.summaryLabel} numberOfLines={1}>WIN RATE</Text>
-            <Text
-              style={[styles.summaryValue, { fontSize: getResponsiveFontSize(winRateStr) }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {winRateStr}
-            </Text>
-          </View>
+          </FadeInView>
 
-          <View style={styles.summaryCard}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="bar-chart-outline" size={20} color={getValueColor(roiValue)} />
+          <FadeInView delay={380} direction="bottom" style={styles.summaryCardFlex}>
+            <View style={styles.summaryCard}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="bar-chart-outline" size={20} color={getValueColor(roiValue)} />
+              </View>
+              <Text style={styles.summaryLabel} numberOfLines={1}>ROI</Text>
+              <Text
+                style={[styles.summaryValue, { color: getValueColor(roiValue), fontSize: getResponsiveFontSize(roiStr) }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {roiStr}
+              </Text>
             </View>
-            <Text style={styles.summaryLabel} numberOfLines={1}>ROI</Text>
-            <Text
-              style={[styles.summaryValue, { color: getValueColor(roiValue), fontSize: getResponsiveFontSize(roiStr) }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {roiStr}
-            </Text>
-          </View>
+          </FadeInView>
         </Animated.View>
 
         {/* Filter Tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterTabsContainer}
-        >
-          {(['All', 'Wins', 'Losses', 'Pending'] as FilterType[]).map((filter) => {
-            const count = filter === 'All' ? totalAllBets
-              : filter === 'Wins' ? totalWins
-              : filter === 'Losses' ? totalLosses
-              : totalPending;
-            return (
-              <TouchableOpacity
-                key={filter}
-                style={[
-                  styles.filterTab,
-                  selectedFilter === filter && styles.filterTabActive,
-                ]}
-                onPress={() => setSelectedFilter(filter)}
-              >
-                <Text
+        <FadeInView delay={440} direction="none">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterTabsContainer}
+          >
+            {(['All', 'Wins', 'Losses', 'Pending'] as FilterType[]).map((filter) => {
+              const count = filter === 'All' ? totalAllBets
+                : filter === 'Wins' ? totalWins
+                : filter === 'Losses' ? totalLosses
+                : totalPending;
+              return (
+                <AnimatedPressable
+                  key={filter}
                   style={[
-                    styles.filterTabText,
-                    selectedFilter === filter && styles.filterTabTextActive,
+                    styles.filterTab,
+                    selectedFilter === filter && styles.filterTabActive,
                   ]}
+                  onPress={() => setSelectedFilter(filter)}
+                  scaleDown={0.93}
                 >
-                  {filter} {count}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.filterTabText,
+                      selectedFilter === filter && styles.filterTabTextActive,
+                    ]}
+                  >
+                    {filter} {count}
+                  </Text>
+                </AnimatedPressable>
+              );
+            })}
+          </ScrollView>
+        </FadeInView>
 
         {/* Bet Cards List */}
         <View style={styles.betsList}>
           {hasBets ? (
-            filteredBets.map((bet) => {
+            filteredBets.map((bet, index) => {
               const sc = getStatusConfig(bet.status);
               const roiPctValue = bet.wager > 0 ? ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100 : 0;
               const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
               return (
-              <TouchableOpacity
-                key={bet.id}
-                style={styles.betCard}
-                activeOpacity={0.7}
-                onPress={() => router.push(`/bet-details/${bet.id}`)}
-              >
-                <View style={styles.betHeader}>
-                  <View style={styles.betHeaderLeft}>
-                    <Text style={styles.platformName}>{bet.sportsbook || 'Unknown'}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: sc.statusBg }]}>
-                      <Text style={[styles.statusBadgeText, { color: sc.statusColor }]}>
-                        {sc.label}
-                      </Text>
+              <FadeInView key={bet.id} delay={500 + index * 60} direction="bottom">
+                <AnimatedPressable
+                  style={styles.betCard}
+                  onPress={() => router.push(`/bet-details/${bet.id}`)}
+                  scaleDown={0.98}
+                >
+                  <View style={styles.betHeader}>
+                    <View style={styles.betHeaderLeft}>
+                      <Text style={styles.platformName}>{bet.sportsbook || 'Unknown'}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: sc.statusBg }]}>
+                        <Text style={[styles.statusBadgeText, { color: sc.statusColor }]}>
+                          {sc.label}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons name={sc.icon as any} size={24} color={sc.statusColor} />
+                  </View>
+                  <Text style={styles.betType}>{bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : ''}</Text>
+                  <View style={styles.statsRow}>
+                    <View style={styles.statColumn}>
+                      <Text style={styles.statLabel}>WAGER</Text>
+                      <Text style={styles.statValue}>{formatCurrency(bet.wager)}</Text>
+                    </View>
+                    <View style={styles.statColumn}>
+                      <Text style={styles.statLabel}>POTENTIAL</Text>
+                      <Text style={styles.statValue}>{formatCurrency(bet.potential_payout || 0)}</Text>
+                    </View>
+                    <View style={styles.statColumn}>
+                      <Text style={styles.statLabel}>ROI</Text>
+                      <Text style={styles.roiValue}>{formatPercent(roiPctValue, true)}</Text>
                     </View>
                   </View>
-                  <Ionicons name={sc.icon as any} size={24} color={sc.statusColor} />
-                </View>
-                <Text style={styles.betType}>{bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : ''}</Text>
-                <View style={styles.statsRow}>
-                  <View style={styles.statColumn}>
-                    <Text style={styles.statLabel}>WAGER</Text>
-                    <Text style={styles.statValue}>{formatCurrency(bet.wager)}</Text>
+                  <View style={styles.betFooter}>
+                    <Text style={styles.betDate}>{dateStr}</Text>
+                    <Text style={styles.betId}>#{String(bet.id).slice(-4)}</Text>
                   </View>
-                  <View style={styles.statColumn}>
-                    <Text style={styles.statLabel}>POTENTIAL</Text>
-                    <Text style={styles.statValue}>{formatCurrency(bet.potential_payout || 0)}</Text>
-                  </View>
-                  <View style={styles.statColumn}>
-                    <Text style={styles.statLabel}>ROI</Text>
-                    <Text style={styles.roiValue}>{formatPercent(roiPctValue, true)}</Text>
-                  </View>
-                </View>
-                <View style={styles.betFooter}>
-                  <Text style={styles.betDate}>{dateStr}</Text>
-                  <Text style={styles.betId}>#{String(bet.id).slice(-4)}</Text>
-                </View>
-              </TouchableOpacity>
+                </AnimatedPressable>
+              </FadeInView>
               );
             })
           ) : (
-            <View style={styles.emptyStateCard}>
-              <View style={styles.emptyIconCircle}>
-                <Ionicons name="bar-chart-outline" size={36} color="#6366F1" />
+            <FadeInView delay={500} direction="bottom">
+              <View style={styles.emptyStateCard}>
+                <View style={styles.emptyIconCircle}>
+                  <Ionicons name="bar-chart-outline" size={36} color="#6366F1" />
+                </View>
+                <Text style={styles.emptyTitle}>No betting history</Text>
+                <Text style={styles.emptySubtitle}>
+                  Your bets will appear here once you start tracking
+                </Text>
               </View>
-              <Text style={styles.emptyTitle}>No betting history</Text>
-              <Text style={styles.emptySubtitle}>
-                Your bets will appear here once you start tracking
-              </Text>
-            </View>
+            </FadeInView>
           )}
         </View>
       </ScrollView>
@@ -374,6 +396,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginBottom: 12,
+  },
+  summaryCardFlex: {
+    flex: 1,
   },
   summaryCard: {
     flex: 1,

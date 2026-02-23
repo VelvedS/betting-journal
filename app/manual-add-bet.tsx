@@ -26,6 +26,14 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import RAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import AnimatedPressable from '@/components/AnimatedPressable';
+import FadeInView from '@/components/FadeInView';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -239,6 +247,19 @@ export default function ManualAddBetScreen() {
 
   // Payout
   const [potentialPayout, setPotentialPayout] = useState('0.00');
+
+  // Payout pulse animation
+  const payoutOpacity = useSharedValue(1);
+  const payoutStyle = useAnimatedStyle(() => ({ opacity: payoutOpacity.value }));
+
+  useEffect(() => {
+    if (potentialPayout !== '0.00') {
+      payoutOpacity.value = withSequence(
+        withTiming(0.5, { duration: 120 }),
+        withTiming(1, { duration: 180 }),
+      );
+    }
+  }, [potentialPayout]);
 
   useEffect(() => {
     const wagerNum = parseFloat(wager);
@@ -555,9 +576,11 @@ export default function ManualAddBetScreen() {
       <StatusBar style="dark" />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Back Button */}
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color="#1A1A1A" />
-        </TouchableOpacity>
+        <FadeInView delay={0} direction="none">
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} scaleDown={0.9}>
+            <Ionicons name="arrow-back" size={22} color="#1A1A1A" />
+          </AnimatedPressable>
+        </FadeInView>
 
         {/* AI Banner */}
         {hasRouteParams && showAiBanner && (
@@ -574,314 +597,351 @@ export default function ManualAddBetScreen() {
         )}
 
         {/* Field 1 - Sportsbook */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>Where did you place this bet?</Text>
-          {isPlatformOther ? (
-            <View style={styles.customInputContainer}>
-              <TextInput style={styles.customInput} placeholder="Type platform name..." placeholderTextColor="#9B9B9B" value={customPlatform} onChangeText={setCustomPlatform} />
-              <TouchableOpacity style={styles.clearButton} onPress={handleClearPlatform} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={14} color="#9B9B9B" /><Text style={styles.clearText}>Clear</Text>
+        <FadeInView delay={60} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>Where did you place this bet?</Text>
+            {isPlatformOther ? (
+              <View style={styles.customInputContainer}>
+                <TextInput style={styles.customInput} placeholder="Type platform name..." placeholderTextColor="#9B9B9B" value={customPlatform} onChangeText={setCustomPlatform} />
+                <TouchableOpacity style={styles.clearButton} onPress={handleClearPlatform} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={14} color="#9B9B9B" /><Text style={styles.clearText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.dropdownInput} onPress={openPlatformSheet} activeOpacity={0.7}>
+                <Text style={[styles.dropdownValueText, !selectedPlatform && styles.dropdownPlaceholderText]}>{selectedPlatform || 'Select a platform...'}</Text>
+                <Ionicons name="chevron-down" size={18} color="#9B9B9B" style={styles.dropdownIcon} />
               </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.dropdownInput} onPress={openPlatformSheet} activeOpacity={0.7}>
-              <Text style={[styles.dropdownValueText, !selectedPlatform && styles.dropdownPlaceholderText]}>{selectedPlatform || 'Select a platform...'}</Text>
-              <Ionicons name="chevron-down" size={18} color="#9B9B9B" style={styles.dropdownIcon} />
-            </TouchableOpacity>
-          )}
-        </View>
+            )}
+          </View>
+        </FadeInView>
 
         {/* Field 2 - Bet Type */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>What type of bet?</Text>
-          <View style={styles.pillsContainer}>
-            {(['moneyline', 'spread', 'ou', 'parlay', 'prop', 'other'] as BetType[]).map((type) => (
-              <TouchableOpacity key={type} style={[styles.pill, betType === type && styles.pillActive]} onPress={() => setBetType(type)} activeOpacity={0.7}>
-                <Text style={[styles.pillText, betType === type && styles.pillTextActive]}>
-                  {type === 'ou' ? 'O/U' : type.charAt(0).toUpperCase() + type.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <FadeInView delay={120} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>What type of bet?</Text>
+            <View style={styles.pillsContainer}>
+              {(['moneyline', 'spread', 'ou', 'parlay', 'prop', 'other'] as BetType[]).map((type) => (
+                <TouchableOpacity key={type} style={[styles.pill, betType === type && styles.pillActive]} onPress={() => setBetType(type)} activeOpacity={0.7}>
+                  <Text style={[styles.pillText, betType === type && styles.pillTextActive]}>
+                    {type === 'ou' ? 'O/U' : type.charAt(0).toUpperCase() + type.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
+        </FadeInView>
 
         {/* Field 3 - Sport */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>What sport?</Text>
-          {isSportOther ? (
-            <View style={styles.customInputContainer}>
-              <TextInput style={styles.customInput} placeholder="Type sport name..." placeholderTextColor="#9B9B9B" value={customSport} onChangeText={setCustomSport} />
-              <TouchableOpacity style={styles.clearButton} onPress={handleClearSport} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={14} color="#9B9B9B" /><Text style={styles.clearText}>Clear</Text>
+        <FadeInView delay={180} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>What sport?</Text>
+            {isSportOther ? (
+              <View style={styles.customInputContainer}>
+                <TextInput style={styles.customInput} placeholder="Type sport name..." placeholderTextColor="#9B9B9B" value={customSport} onChangeText={setCustomSport} />
+                <TouchableOpacity style={styles.clearButton} onPress={handleClearSport} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={14} color="#9B9B9B" /><Text style={styles.clearText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.dropdownInput} onPress={openSportSheet} activeOpacity={0.7}>
+                <Text style={[styles.dropdownValueText, !selectedSport && styles.dropdownPlaceholderText]}>{selectedSport || 'Select a sport...'}</Text>
+                <Ionicons name="chevron-down" size={18} color="#9B9B9B" style={styles.dropdownIcon} />
               </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.dropdownInput} onPress={openSportSheet} activeOpacity={0.7}>
-              <Text style={[styles.dropdownValueText, !selectedSport && styles.dropdownPlaceholderText]}>{selectedSport || 'Select a sport...'}</Text>
-              <Ionicons name="chevron-down" size={18} color="#9B9B9B" style={styles.dropdownIcon} />
-            </TouchableOpacity>
-          )}
-        </View>
+            )}
+          </View>
+        </FadeInView>
 
         {/* Field 4 - Matchup */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>Who's playing? (Matchup/Event)</Text>
-          <TextInput style={styles.textInput} placeholder="e.g., Lakers vs Warriors" placeholderTextColor="#9B9B9B" value={matchup} onChangeText={setMatchup} />
-        </View>
+        <FadeInView delay={240} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>Who's playing? (Matchup/Event)</Text>
+            <TextInput style={styles.textInput} placeholder="e.g., Lakers vs Warriors" placeholderTextColor="#9B9B9B" value={matchup} onChangeText={setMatchup} />
+          </View>
+        </FadeInView>
 
         {/* Field 5 - Description */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>Describe your bet</Text>
-          <TextInput style={[styles.textInput, styles.textareaInput]} placeholder="e.g., Lakers -5.5, Over 225.5" placeholderTextColor="#9B9B9B" multiline numberOfLines={3} textAlignVertical="top" value={description} onChangeText={setDescription} />
-        </View>
+        <FadeInView delay={300} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>Describe your bet</Text>
+            <TextInput style={[styles.textInput, styles.textareaInput]} placeholder="e.g., Lakers -5.5, Over 225.5" placeholderTextColor="#9B9B9B" multiline numberOfLines={3} textAlignVertical="top" value={description} onChangeText={setDescription} />
+          </View>
+        </FadeInView>
 
         {/* Field 6 - Odds */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>Odds</Text>
-          <View style={styles.oddsFormatContainer}>
-            {(['american', 'decimal', 'fractional'] as OddsFormat[]).map((fmt) => (
-              <TouchableOpacity key={fmt} style={[styles.oddsFormatPill, oddsFormat === fmt && styles.oddsFormatPillActive]} onPress={() => setOddsFormat(fmt)} activeOpacity={0.7}>
-                <Text style={[styles.oddsFormatText, oddsFormat === fmt && styles.oddsFormatTextActive]}>{fmt.charAt(0).toUpperCase() + fmt.slice(1)}</Text>
-              </TouchableOpacity>
-            ))}
+        <FadeInView delay={360} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>Odds</Text>
+            <View style={styles.oddsFormatContainer}>
+              {(['american', 'decimal', 'fractional'] as OddsFormat[]).map((fmt) => (
+                <TouchableOpacity key={fmt} style={[styles.oddsFormatPill, oddsFormat === fmt && styles.oddsFormatPillActive]} onPress={() => setOddsFormat(fmt)} activeOpacity={0.7}>
+                  <Text style={[styles.oddsFormatText, oddsFormat === fmt && styles.oddsFormatTextActive]}>{fmt.charAt(0).toUpperCase() + fmt.slice(1)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput style={styles.textInput} placeholder={getOddsPlaceholder()} placeholderTextColor="#9B9B9B" value={odds} onChangeText={setOdds} />
           </View>
-          <TextInput style={styles.textInput} placeholder={getOddsPlaceholder()} placeholderTextColor="#9B9B9B" value={odds} onChangeText={setOdds} />
-        </View>
+        </FadeInView>
 
         {/* Field 7 - Wager */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>How much did you wager?</Text>
-          <View style={styles.currencyInputContainer}>
-            <Text style={styles.currencySymbol}>$</Text>
-            <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" keyboardType="decimal-pad" value={wager} onChangeText={setWager} />
+        <FadeInView delay={420} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>How much did you wager?</Text>
+            <View style={styles.currencyInputContainer}>
+              <Text style={styles.currencySymbol}>$</Text>
+              <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" keyboardType="decimal-pad" value={wager} onChangeText={setWager} />
+            </View>
           </View>
-        </View>
+        </FadeInView>
 
         {/* Field 8 - Potential Payout */}
-        <View style={styles.formField}>
-          <View style={styles.labelRow}>
-            <Text style={styles.fieldLabel}>Potential Payout</Text>
-            <Text style={styles.labelHint}>(Auto-calculated)</Text>
+        <FadeInView delay={480} direction="bottom">
+          <View style={styles.formField}>
+            <View style={styles.labelRow}>
+              <Text style={styles.fieldLabel}>Potential Payout</Text>
+              <Text style={styles.labelHint}>(Auto-calculated)</Text>
+            </View>
+            <RAnimated.View style={payoutStyle}>
+              <View style={[styles.currencyInputContainer, styles.readOnlyInput]}>
+                <Text style={styles.currencySymbol}>$</Text>
+                <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" editable={false} value={potentialPayout} />
+              </View>
+            </RAnimated.View>
           </View>
-          <View style={[styles.currencyInputContainer, styles.readOnlyInput]}>
-            <Text style={styles.currencySymbol}>$</Text>
-            <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" editable={false} value={potentialPayout} />
-          </View>
-        </View>
+        </FadeInView>
 
         {/* Field 9 - Status */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>Status</Text>
-          <View style={styles.statusContainer}>
-            {(['pending', 'won', 'lost', 'void'] as BetStatus[]).map((s) => (
-              <StatusPill key={s} value={s} selected={status === s} onPress={() => setStatus(s)} />
-            ))}
+        <FadeInView delay={540} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>Status</Text>
+            <View style={styles.statusContainer}>
+              {(['pending', 'won', 'lost', 'void'] as BetStatus[]).map((s) => (
+                <StatusPill key={s} value={s} selected={status === s} onPress={() => setStatus(s)} />
+              ))}
+            </View>
           </View>
-        </View>
+        </FadeInView>
 
         {/* Field 10 - Date */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>When was this bet placed?</Text>
-          <TouchableOpacity style={styles.dropdownInput} onPress={handleOpenDatePicker} activeOpacity={0.7}>
-            <Ionicons name="calendar-outline" size={18} color="#9B9B9B" style={{ marginRight: 10 }} />
-            <Text style={[styles.dropdownValueText, !placedAt && styles.dropdownPlaceholderText]}>
-              {placedAt ? formatDateDisplay(placedAt) : 'Select date and time'}
-            </Text>
-          </TouchableOpacity>
+        <FadeInView delay={600} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>When was this bet placed?</Text>
+            <TouchableOpacity style={styles.dropdownInput} onPress={handleOpenDatePicker} activeOpacity={0.7}>
+              <Ionicons name="calendar-outline" size={18} color="#9B9B9B" style={{ marginRight: 10 }} />
+              <Text style={[styles.dropdownValueText, !placedAt && styles.dropdownPlaceholderText]}>
+                {placedAt ? formatDateDisplay(placedAt) : 'Select date and time'}
+              </Text>
+            </TouchableOpacity>
 
-          {/* Web date picker modal */}
-          {Platform.OS === 'web' && showDatePicker && (
-            <Modal visible transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
-              <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
-                <View style={dateStyles.overlay}>
-                  <TouchableWithoutFeedback onPress={() => {}}>
-                    <View style={dateStyles.webPickerCard}>
-                      <Text style={dateStyles.webPickerTitle}>Select date and time</Text>
-                      <View style={dateStyles.webInputRow}>
-                        <Text style={dateStyles.webLabel}>Date</Text>
-                        <TextInput
-                          style={dateStyles.webInput}
-                          value={`${tempDate.getFullYear()}-${String(tempDate.getMonth() + 1).padStart(2, '0')}-${String(tempDate.getDate()).padStart(2, '0')}`}
-                          onChangeText={(text) => {
-                            const parts = text.split('-');
-                            if (parts.length === 3) {
-                              const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), tempDate.getHours(), tempDate.getMinutes());
-                              if (!isNaN(d.getTime())) setTempDate(d);
-                            }
-                          }}
-                          placeholder="YYYY-MM-DD"
-                          placeholderTextColor="#9B9B9B"
-                        />
+            {/* Web date picker modal */}
+            {Platform.OS === 'web' && showDatePicker && (
+              <Modal visible transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+                <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+                  <View style={dateStyles.overlay}>
+                    <TouchableWithoutFeedback onPress={() => {}}>
+                      <View style={dateStyles.webPickerCard}>
+                        <Text style={dateStyles.webPickerTitle}>Select date and time</Text>
+                        <View style={dateStyles.webInputRow}>
+                          <Text style={dateStyles.webLabel}>Date</Text>
+                          <TextInput
+                            style={dateStyles.webInput}
+                            value={`${tempDate.getFullYear()}-${String(tempDate.getMonth() + 1).padStart(2, '0')}-${String(tempDate.getDate()).padStart(2, '0')}`}
+                            onChangeText={(text) => {
+                              const parts = text.split('-');
+                              if (parts.length === 3) {
+                                const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), tempDate.getHours(), tempDate.getMinutes());
+                                if (!isNaN(d.getTime())) setTempDate(d);
+                              }
+                            }}
+                            placeholder="YYYY-MM-DD"
+                            placeholderTextColor="#9B9B9B"
+                          />
+                        </View>
+                        <View style={dateStyles.webInputRow}>
+                          <Text style={dateStyles.webLabel}>Time</Text>
+                          <TextInput
+                            style={dateStyles.webInput}
+                            value={`${String(tempDate.getHours()).padStart(2, '0')}:${String(tempDate.getMinutes()).padStart(2, '0')}`}
+                            onChangeText={(text) => {
+                              const parts = text.split(':');
+                              if (parts.length === 2) {
+                                const d = new Date(tempDate);
+                                d.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0);
+                                if (!isNaN(d.getTime())) setTempDate(d);
+                              }
+                            }}
+                            placeholder="HH:MM"
+                            placeholderTextColor="#9B9B9B"
+                          />
+                        </View>
+                        <View style={dateStyles.webButtonRow}>
+                          <TouchableOpacity style={dateStyles.webCancelBtn} onPress={() => setShowDatePicker(false)}>
+                            <Text style={dateStyles.webCancelText}>Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={dateStyles.webConfirmBtn} onPress={handleConfirmWebDate}>
+                            <Text style={dateStyles.webConfirmText}>Confirm</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                      <View style={dateStyles.webInputRow}>
-                        <Text style={dateStyles.webLabel}>Time</Text>
-                        <TextInput
-                          style={dateStyles.webInput}
-                          value={`${String(tempDate.getHours()).padStart(2, '0')}:${String(tempDate.getMinutes()).padStart(2, '0')}`}
-                          onChangeText={(text) => {
-                            const parts = text.split(':');
-                            if (parts.length === 2) {
-                              const d = new Date(tempDate);
-                              d.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0);
-                              if (!isNaN(d.getTime())) setTempDate(d);
-                            }
-                          }}
-                          placeholder="HH:MM"
-                          placeholderTextColor="#9B9B9B"
-                        />
-                      </View>
-                      <View style={dateStyles.webButtonRow}>
-                        <TouchableOpacity style={dateStyles.webCancelBtn} onPress={() => setShowDatePicker(false)}>
-                          <Text style={dateStyles.webCancelText}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={dateStyles.webConfirmBtn} onPress={handleConfirmWebDate}>
-                          <Text style={dateStyles.webConfirmText}>Confirm</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </TouchableWithoutFeedback>
-                </View>
-              </TouchableWithoutFeedback>
-            </Modal>
-          )}
+                    </TouchableWithoutFeedback>
+                  </View>
+                </TouchableWithoutFeedback>
+              </Modal>
+            )}
 
-          {/* Native date picker */}
-          {Platform.OS !== 'web' && showDatePicker && (
-            <DateTimePicker value={tempDate} mode="date" display="default" onChange={handleDateChange} minimumDate={minDate} maximumDate={maxDate} />
-          )}
-          {Platform.OS !== 'web' && showTimePicker && (
-            <DateTimePicker value={tempDate} mode="time" display="default" onChange={handleTimeChange} />
-          )}
-        </View>
+            {/* Native date picker */}
+            {Platform.OS !== 'web' && showDatePicker && (
+              <DateTimePicker value={tempDate} mode="date" display="default" onChange={handleDateChange} minimumDate={minDate} maximumDate={maxDate} />
+            )}
+            {Platform.OS !== 'web' && showTimePicker && (
+              <DateTimePicker value={tempDate} mode="time" display="default" onChange={handleTimeChange} />
+            )}
+          </View>
+        </FadeInView>
 
         {/* Field 10B - Parlay Legs (only if bet_type === 'parlay') */}
         {betType === 'parlay' && (
-          <View style={styles.formField}>
-            <View style={styles.parlayHeaderRow}>
-              <Text style={styles.fieldLabel}>Parlay Legs</Text>
-              <View style={styles.parlayCountBadge}>
-                <Text style={styles.parlayCountText}>{parlayLegs.length}</Text>
-              </View>
-            </View>
-
-            {parlayLegs.map((leg, index) => (
-              <View key={index} style={styles.parlayLegCard}>
-                <View style={styles.parlayLegContent}>
-                  <TextInput
-                    style={[styles.textInput, styles.parlayLegInput]}
-                    placeholder="e.g. Lakers ML"
-                    placeholderTextColor="#9B9B9B"
-                    value={leg.description}
-                    onChangeText={(val) => updateParlayLeg(index, 'description', val)}
-                  />
-                  <TextInput
-                    style={[styles.textInput, styles.parlayLegInput]}
-                    placeholder="e.g. +120"
-                    placeholderTextColor="#9B9B9B"
-                    value={leg.odds}
-                    onChangeText={(val) => updateParlayLeg(index, 'odds', val)}
-                  />
-
-                  <View style={styles.parlayLegStatusRow}>
-                    {(['pending', 'won', 'lost'] as BetStatus[]).map((s) => {
-                      if (s === 'void') return null;
-                      const isSelected = leg.status === s;
-                      return (
-                        <TouchableOpacity
-                          key={s}
-                          style={[
-                            styles.parlayStatusPill,
-                            isSelected && (s === 'won' ? styles.parlayStatusWon : s === 'lost' ? styles.parlayStatusLost : styles.parlayStatusPending),
-                          ]}
-                          onPress={() => updateParlayLeg(index, 'status', s)}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.parlayStatusText,
-                              isSelected && styles.parlayStatusTextActive,
-                            ]}
-                          >
-                            {s.charAt(0).toUpperCase() + s.slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+          <FadeInView delay={660} direction="bottom">
+            <View style={styles.formField}>
+              <View style={styles.parlayHeaderRow}>
+                <Text style={styles.fieldLabel}>Parlay Legs</Text>
+                <View style={styles.parlayCountBadge}>
+                  <Text style={styles.parlayCountText}>{parlayLegs.length}</Text>
                 </View>
-
-                <TouchableOpacity
-                  style={styles.parlayDeleteBtn}
-                  onPress={() => removeParlayLeg(index)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="close" size={18} color="#E85D5D" />
-                </TouchableOpacity>
               </View>
-            ))}
 
-            <TouchableOpacity style={styles.addLegButton} onPress={addParlayLeg} activeOpacity={0.7}>
-              <Ionicons name="add-circle-outline" size={18} color="#6366F1" />
-              <Text style={styles.addLegText}>Add Leg</Text>
-            </TouchableOpacity>
-          </View>
+              {parlayLegs.map((leg, index) => (
+                <View key={index} style={styles.parlayLegCard}>
+                  <View style={styles.parlayLegContent}>
+                    <TextInput
+                      style={[styles.textInput, styles.parlayLegInput]}
+                      placeholder="e.g. Lakers ML"
+                      placeholderTextColor="#9B9B9B"
+                      value={leg.description}
+                      onChangeText={(val) => updateParlayLeg(index, 'description', val)}
+                    />
+                    <TextInput
+                      style={[styles.textInput, styles.parlayLegInput]}
+                      placeholder="e.g. +120"
+                      placeholderTextColor="#9B9B9B"
+                      value={leg.odds}
+                      onChangeText={(val) => updateParlayLeg(index, 'odds', val)}
+                    />
+
+                    <View style={styles.parlayLegStatusRow}>
+                      {(['pending', 'won', 'lost'] as BetStatus[]).map((s) => {
+                        if (s === 'void') return null;
+                        const isSelected = leg.status === s;
+                        return (
+                          <TouchableOpacity
+                            key={s}
+                            style={[
+                              styles.parlayStatusPill,
+                              isSelected && (s === 'won' ? styles.parlayStatusWon : s === 'lost' ? styles.parlayStatusLost : styles.parlayStatusPending),
+                            ]}
+                            onPress={() => updateParlayLeg(index, 'status', s)}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.parlayStatusText,
+                                isSelected && styles.parlayStatusTextActive,
+                              ]}
+                            >
+                              {s.charAt(0).toUpperCase() + s.slice(1)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.parlayDeleteBtn}
+                    onPress={() => removeParlayLeg(index)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close" size={18} color="#E85D5D" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              <TouchableOpacity style={styles.addLegButton} onPress={addParlayLeg} activeOpacity={0.7}>
+                <Ionicons name="add-circle-outline" size={18} color="#6366F1" />
+                <Text style={styles.addLegText}>Add Leg</Text>
+              </TouchableOpacity>
+            </View>
+          </FadeInView>
         )}
 
         {/* Field 11 - Notes */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>Notes (Optional)</Text>
-          <TextInput style={[styles.textInput, styles.textareaInputLarge]} placeholder="Why did you make this bet?" placeholderTextColor="#9B9B9B" multiline numberOfLines={4} textAlignVertical="top" value={notes} onChangeText={setNotes} />
-        </View>
+        <FadeInView delay={720} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>Notes (Optional)</Text>
+            <TextInput style={[styles.textInput, styles.textareaInputLarge]} placeholder="Why did you make this bet?" placeholderTextColor="#9B9B9B" multiline numberOfLines={4} textAlignVertical="top" value={notes} onChangeText={setNotes} />
+          </View>
+        </FadeInView>
 
         {/* Field 12 - Upload Screenshot */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>Upload Ticket Screenshot (Optional)</Text>
-          {ticketImageUrl ? (
-            <View style={aiStyles.imagePreviewWrap}>
-              <Image source={{ uri: ticketImageUrl }} style={aiStyles.imagePreview} resizeMode="cover" />
-              <TouchableOpacity style={aiStyles.imageRemoveBtn} onPress={() => setTicketImageUrl('')} activeOpacity={0.7}>
-                <Ionicons name="close" size={14} color="#FFFFFF" />
-              </TouchableOpacity>
-              <TouchableOpacity style={aiStyles.retakeBtn} activeOpacity={0.7} onPress={() => setTicketImageUrl('')}>
-                <Text style={aiStyles.retakeText}>Retake / Re-upload</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7}>
-                <Ionicons name="cloud-upload-outline" size={28} color="#9B9B9B" />
-                <Text style={styles.uploadTitle}>Choose Photo or Take Photo</Text>
-                <Text style={styles.uploadHint}>PNG, JPG up to 10MB</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.takePhotoButton} activeOpacity={0.7}>
-                <Ionicons name="camera-outline" size={18} color="#4A4A4A" style={styles.takePhotoIcon} />
-                <Text style={styles.takePhotoText}>Take Photo</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+        <FadeInView delay={780} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>Upload Ticket Screenshot (Optional)</Text>
+            {ticketImageUrl ? (
+              <View style={aiStyles.imagePreviewWrap}>
+                <Image source={{ uri: ticketImageUrl }} style={aiStyles.imagePreview} resizeMode="cover" />
+                <TouchableOpacity style={aiStyles.imageRemoveBtn} onPress={() => setTicketImageUrl('')} activeOpacity={0.7}>
+                  <Ionicons name="close" size={14} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity style={aiStyles.retakeBtn} activeOpacity={0.7} onPress={() => setTicketImageUrl('')}>
+                  <Text style={aiStyles.retakeText}>Retake / Re-upload</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7}>
+                  <Ionicons name="cloud-upload-outline" size={28} color="#9B9B9B" />
+                  <Text style={styles.uploadTitle}>Choose Photo or Take Photo</Text>
+                  <Text style={styles.uploadHint}>PNG, JPG up to 10MB</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.takePhotoButton} activeOpacity={0.7}>
+                  <Ionicons name="camera-outline" size={18} color="#4A4A4A" style={styles.takePhotoIcon} />
+                  <Text style={styles.takePhotoText}>Take Photo</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </FadeInView>
 
         {/* Field 13 - Tags */}
-        <View style={styles.formField}>
-          <Text style={styles.fieldLabel}>Tags (Optional)</Text>
-          <View style={styles.tagsContainer}>
-            {['Underdog Bet', 'Live Bet', 'Research-Based', 'High Confidence', 'Hedge Bet', 'System Play'].map((tag) => (
-              <TouchableOpacity key={tag} style={[styles.tag, selectedTags.includes(tag) && styles.tagSelected]} onPress={() => toggleTag(tag)} activeOpacity={0.7}>
-                <Text style={[styles.tagText, selectedTags.includes(tag) && styles.tagTextSelected]}>{tag}</Text>
-              </TouchableOpacity>
-            ))}
+        <FadeInView delay={840} direction="bottom">
+          <View style={styles.formField}>
+            <Text style={styles.fieldLabel}>Tags (Optional)</Text>
+            <View style={styles.tagsContainer}>
+              {['Underdog Bet', 'Live Bet', 'Research-Based', 'High Confidence', 'Hedge Bet', 'System Play'].map((tag) => (
+                <TouchableOpacity key={tag} style={[styles.tag, selectedTags.includes(tag) && styles.tagSelected]} onPress={() => toggleTag(tag)} activeOpacity={0.7}>
+                  <Text style={[styles.tagText, selectedTags.includes(tag) && styles.tagTextSelected]}>{tag}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
+        </FadeInView>
 
         {/* Submit Button */}
-        <TouchableOpacity style={[styles.submitButton, isSaving && { opacity: 0.7 }]} onPress={handleSaveBet} activeOpacity={0.8} disabled={isSaving}>
-          {isSaving ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.submitButtonText}>Save Bet</Text>
-          )}
-        </TouchableOpacity>
+        <FadeInView delay={900} direction="bottom">
+          <AnimatedPressable
+            style={[styles.submitButton, isSaving && { opacity: 0.7 }]}
+            onPress={handleSaveBet}
+            disabled={isSaving}
+            scaleDown={0.98}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.submitButtonText}>Save Bet</Text>
+            )}
+          </AnimatedPressable>
+        </FadeInView>
       </ScrollView>
 
       {/* Platform Bottom Sheet */}

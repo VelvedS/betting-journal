@@ -1,11 +1,14 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, AppState } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { formatCompactCurrency, formatPercent, formatWholeNumber } from '@/lib/formatters';
+import AnimatedPressable from '@/components/AnimatedPressable';
+import FadeInView from '@/components/FadeInView';
+import AnimatedNumber from '@/components/AnimatedNumber';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -94,124 +97,139 @@ export default function ProfileScreen() {
 
   const profitColor = profit === null || profit >= 0 ? '#10B981' : '#E85D5D';
 
+  const menuItems = [
+    { icon: 'person-outline', title: 'Account Settings', description: 'Manage your profile', route: '/account-settings' },
+    { icon: 'notifications-outline', title: 'Notifications', description: 'Push & email preferences', route: '/notifications' },
+    { icon: 'settings-outline', title: 'Preferences', description: 'App settings & privacy', route: '/preferences' },
+    { icon: 'help-circle-outline', title: 'Help & Support', description: 'FAQs and contact', route: '/help-support' },
+  ] as const;
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header Section */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
-          <Text style={styles.subtitle}>Manage your account settings</Text>
-        </View>
+        <FadeInView delay={0} direction="bottom">
+          <View style={styles.header}>
+            <Text style={styles.title}>Profile</Text>
+            <Text style={styles.subtitle}>Manage your account settings</Text>
+          </View>
+        </FadeInView>
 
         {/* Card 1 - User Profile Card */}
-        <View style={styles.profileCard}>
-          {/* User Info Section */}
-          <View style={styles.userInfoSection}>
-            <View style={styles.avatarCircle}>
-              <Ionicons name="person-outline" size={32} color="#6B6B6B" />
+        <FadeInView delay={80} direction="bottom">
+          <View style={styles.profileCard}>
+            {/* User Info Section */}
+            <View style={styles.userInfoSection}>
+              <View style={styles.avatarCircle}>
+                <Ionicons name="person-outline" size={32} color="#6B6B6B" />
+              </View>
+              <View style={styles.userTextContainer}>
+                <Text style={styles.userName}>{user?.user_metadata?.full_name || 'John Trader'}</Text>
+                <Text style={styles.userEmail}>{user?.email || 'john.trader@email.com'}</Text>
+              </View>
             </View>
-            <View style={styles.userTextContainer}>
-              <Text style={styles.userName}>{user?.user_metadata?.full_name || 'John Trader'}</Text>
-              <Text style={styles.userEmail}>{user?.email || 'john.trader@email.com'}</Text>
+
+            {/* Divider */}
+            <View style={styles.divider} />
+
+            {/* Stats Section */}
+            <View style={styles.statsSection}>
+              <View style={styles.statColumn}>
+                {loading ? (
+                  <Text style={styles.statValue}>—</Text>
+                ) : (
+                  <AnimatedNumber
+                    value={totalBets || 0}
+                    delay={200}
+                    style={styles.statValue}
+                  />
+                )}
+                <Text style={styles.statLabel}>TOTAL BETS</Text>
+              </View>
+              <View style={styles.statColumn}>
+                {loading ? (
+                  <Text style={styles.statValue}>—</Text>
+                ) : (
+                  <AnimatedNumber
+                    value={winRate || 0}
+                    decimals={1}
+                    suffix="%"
+                    delay={240}
+                    style={styles.statValue}
+                  />
+                )}
+                <Text style={styles.statLabel}>WIN RATE</Text>
+              </View>
+              <View style={styles.statColumn}>
+                {loading ? (
+                  <Text style={[styles.statValue, { color: profitColor }]}>—</Text>
+                ) : (
+                  <AnimatedNumber
+                    value={Math.abs(profit || 0)}
+                    prefix={profit !== null && profit < 0 ? '-$' : '$'}
+                    decimals={2}
+                    delay={280}
+                    style={[styles.statValue, { color: profitColor }]}
+                  />
+                )}
+                <Text style={styles.statLabel}>PROFIT</Text>
+              </View>
             </View>
           </View>
-
-          {/* Divider */}
-          <View style={styles.divider} />
-
-          {/* Stats Section */}
-          <View style={styles.statsSection}>
-            <View style={styles.statColumn}>
-              <Text style={styles.statValue}>{loading ? '—' : formatWholeNumber(totalBets || 0)}</Text>
-              <Text style={styles.statLabel}>TOTAL BETS</Text>
-            </View>
-            <View style={styles.statColumn}>
-              <Text style={styles.statValue}>{loading ? '—' : formatPercent(winRate || 0)}</Text>
-              <Text style={styles.statLabel}>WIN RATE</Text>
-            </View>
-            <View style={styles.statColumn}>
-              <Text style={[styles.statValue, { color: profitColor }]}>
-                {loading ? '—' : formatCompactCurrency(profit || 0)}
-              </Text>
-              <Text style={styles.statLabel}>PROFIT</Text>
-            </View>
-          </View>
-        </View>
+        </FadeInView>
 
         {/* Card 2 - Appearance Toggle */}
-        <View style={styles.settingCard}>
-          <View style={styles.settingIconCircle}>
-            <Ionicons name="sunny-outline" size={22} color="#6B6B6B" />
+        <FadeInView delay={200} direction="bottom">
+          <View style={styles.settingCard}>
+            <View style={styles.settingIconCircle}>
+              <Ionicons name="sunny-outline" size={22} color="#6B6B6B" />
+            </View>
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Appearance</Text>
+              <Text style={styles.settingDescription}>The Ledger (Light)</Text>
+            </View>
+            <View style={styles.toggleSwitch}>
+              <View style={styles.toggleThumb} />
+            </View>
           </View>
-          <View style={styles.settingTextContainer}>
-            <Text style={styles.settingTitle}>Appearance</Text>
-            <Text style={styles.settingDescription}>The Ledger (Light)</Text>
-          </View>
-          <View style={styles.toggleSwitch}>
-            <View style={styles.toggleThumb} />
-          </View>
-        </View>
+        </FadeInView>
 
         {/* Card 3 - Settings Menu Card */}
-        <View style={styles.menuCard}>
-          {/* Account Settings */}
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/account-settings')}>
-            <View style={styles.menuIconCircle}>
-              <Ionicons name="person-outline" size={22} color="#6B6B6B" />
-            </View>
-            <View style={styles.menuTextContainer}>
-              <Text style={styles.menuTitle}>Account Settings</Text>
-              <Text style={styles.menuDescription}>Manage your profile</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9B9B9B" />
-          </TouchableOpacity>
-
-          {/* Notifications */}
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/notifications')}>
-            <View style={styles.menuIconCircle}>
-              <Ionicons name="notifications-outline" size={22} color="#6B6B6B" />
-            </View>
-            <View style={styles.menuTextContainer}>
-              <Text style={styles.menuTitle}>Notifications</Text>
-              <Text style={styles.menuDescription}>Push & email preferences</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9B9B9B" />
-          </TouchableOpacity>
-
-          {/* Preferences */}
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/preferences')}>
-            <View style={styles.menuIconCircle}>
-              <Ionicons name="settings-outline" size={22} color="#6B6B6B" />
-            </View>
-            <View style={styles.menuTextContainer}>
-              <Text style={styles.menuTitle}>Preferences</Text>
-              <Text style={styles.menuDescription}>App settings & privacy</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9B9B9B" />
-          </TouchableOpacity>
-
-          {/* Help & Support */}
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/help-support')}>
-            <View style={styles.menuIconCircle}>
-              <Ionicons name="help-circle-outline" size={22} color="#6B6B6B" />
-            </View>
-            <View style={styles.menuTextContainer}>
-              <Text style={styles.menuTitle}>Help & Support</Text>
-              <Text style={styles.menuDescription}>FAQs and contact</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9B9B9B" />
-          </TouchableOpacity>
-        </View>
+        <FadeInView delay={260} direction="bottom">
+          <View style={styles.menuCard}>
+            {menuItems.map((item, index) => (
+              <AnimatedPressable
+                key={item.route}
+                style={styles.menuRow}
+                onPress={() => router.push(item.route as any)}
+                scaleDown={0.98}
+              >
+                <View style={styles.menuIconCircle}>
+                  <Ionicons name={item.icon as any} size={22} color="#6B6B6B" />
+                </View>
+                <View style={styles.menuTextContainer}>
+                  <Text style={styles.menuTitle}>{item.title}</Text>
+                  <Text style={styles.menuDescription}>{item.description}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9B9B9B" />
+              </AnimatedPressable>
+            ))}
+          </View>
+        </FadeInView>
 
         {/* Sign Out Button */}
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={20} color="#E85D5D" style={styles.signOutIcon} />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
+        <FadeInView delay={380} direction="bottom">
+          <AnimatedPressable style={styles.signOutButton} onPress={handleSignOut} scaleDown={0.97}>
+            <Ionicons name="log-out-outline" size={20} color="#E85D5D" style={styles.signOutIcon} />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </AnimatedPressable>
+        </FadeInView>
 
         {/* Version Footer */}
-        <Text style={styles.versionText}>v1.0.0 // TERMINAL</Text>
+        <FadeInView delay={440} direction="none">
+          <Text style={styles.versionText}>v1.0.0 // TERMINAL</Text>
+        </FadeInView>
       </ScrollView>
     </SafeAreaView>
   );

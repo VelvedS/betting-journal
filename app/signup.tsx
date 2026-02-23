@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   SafeAreaView,
@@ -13,6 +12,8 @@ import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
+import AnimatedPressable from '@/components/AnimatedPressable';
+import FadeInView from '@/components/FadeInView';
 
 export default function SignupScreen() {
   const { signUp, session, isLoading: authLoading } = useAuth();
@@ -64,97 +65,109 @@ export default function SignupScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Sign up to start tracking your bets</Text>
-        </View>
+        <FadeInView delay={0} direction="bottom">
+          <View style={styles.header}>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Sign up to start tracking your bets</Text>
+          </View>
+        </FadeInView>
 
         {/* Form */}
         <View style={styles.form}>
           {/* Full Name */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>FULL NAME</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="John Trader"
-              placeholderTextColor="#B0B0B0"
-              value={fullName}
-              onChangeText={setFullName}
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
-          </View>
+          <FadeInView delay={80} direction="bottom">
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>FULL NAME</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="John Trader"
+                placeholderTextColor="#B0B0B0"
+                value={fullName}
+                onChangeText={setFullName}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+            </View>
+          </FadeInView>
 
           {/* Email */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>EMAIL</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="your@email.com"
-              placeholderTextColor="#B0B0B0"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
+          <FadeInView delay={160} direction="bottom">
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>EMAIL</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="your@email.com"
+                placeholderTextColor="#B0B0B0"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+          </FadeInView>
 
           {/* Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>PASSWORD</Text>
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="••••••••"
-                placeholderTextColor="#B0B0B0"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={24}
-                  color="#71717A"
+          <FadeInView delay={240} direction="bottom">
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>PASSWORD</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#B0B0B0"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
-              </TouchableOpacity>
+                <AnimatedPressable
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  scaleDown={0.88}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={24}
+                    color="#71717A"
+                  />
+                </AnimatedPressable>
+              </View>
             </View>
-          </View>
+          </FadeInView>
 
           {/* Confirm Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>CONFIRM PASSWORD</Text>
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="••••••••"
-                placeholderTextColor="#B0B0B0"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showConfirmPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={styles.eyeButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons
-                  name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={24}
-                  color="#71717A"
+          <FadeInView delay={320} direction="bottom">
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>CONFIRM PASSWORD</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#B0B0B0"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
-              </TouchableOpacity>
+                <AnimatedPressable
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={styles.eyeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  scaleDown={0.88}
+                >
+                  <Ionicons
+                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={24}
+                    color="#71717A"
+                  />
+                </AnimatedPressable>
+              </View>
             </View>
-          </View>
+          </FadeInView>
 
           {/* Error Message */}
           {errorMsg ? (
@@ -165,35 +178,42 @@ export default function SignupScreen() {
           ) : null}
 
           {/* Sign Up Button */}
-          <TouchableOpacity
-            style={[styles.signUpButton, isLoading && styles.signUpButtonDisabled]}
-            onPress={handleSignUp}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.signUpButtonText}>Create Account</Text>
-            )}
-          </TouchableOpacity>
+          <FadeInView delay={400} direction="bottom">
+            <AnimatedPressable
+              style={[styles.signUpButton, isLoading && styles.signUpButtonDisabled]}
+              onPress={handleSignUp}
+              disabled={isLoading}
+              scaleDown={0.97}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.signUpButtonText}>Create Account</Text>
+              )}
+            </AnimatedPressable>
+          </FadeInView>
         </View>
 
         {/* Sign In Link */}
-        <View style={styles.signInContainer}>
-          <Text style={styles.signInText}>Already have an account? </Text>
-          <Link href="/" asChild>
-            <TouchableOpacity>
-              <Text style={styles.signInLink}>Sign in</Text>
-            </TouchableOpacity>
-          </Link>
-        </View>
+        <FadeInView delay={460} direction="none">
+          <View style={styles.signInContainer}>
+            <Text style={styles.signInText}>Already have an account? </Text>
+            <Link href="/" asChild>
+              <AnimatedPressable scaleDown={0.94}>
+                <Text style={styles.signInLink}>Sign in</Text>
+              </AnimatedPressable>
+            </Link>
+          </View>
+        </FadeInView>
 
         {/* Quote */}
-        <View style={styles.quoteContainer}>
-          <Text style={styles.quoteText}>
-            "In trading and betting, discipline beats emotion every time."
-          </Text>
-        </View>
+        <FadeInView delay={520} direction="bottom">
+          <View style={styles.quoteContainer}>
+            <Text style={styles.quoteText}>
+              "In trading and betting, discipline beats emotion every time."
+            </Text>
+          </View>
+        </FadeInView>
       </ScrollView>
     </SafeAreaView>
   );

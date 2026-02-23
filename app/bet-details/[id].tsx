@@ -16,8 +16,28 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
+import RAnimated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
+import AnimatedPressable from '@/components/AnimatedPressable';
+import FadeInView from '@/components/FadeInView';
 
 type BetStatus = 'pending' | 'won' | 'lost' | 'void';
+
+const getLegStatusStyle = (status: string) => {
+  switch (status) {
+    case 'won':
+      return { pillBg: '#1B3A2D', pillText: '#86EFAC' };
+    case 'lost':
+      return { pillBg: '#3B1515', pillText: '#FCA5A5' };
+    default:
+      return { pillBg: '#2D3748', pillText: '#9CA3AF' };
+  }
+};
 
 const getStatusStyling = (status: string) => {
   switch (status) {
@@ -108,6 +128,25 @@ export default function BetDetailsScreen() {
 
   const betId = typeof id === 'string' ? id : '';
 
+  // Pulse animation for pending status
+  const pendingPulseOpacity = useSharedValue(1);
+  const pendingPulseStyle = useAnimatedStyle(() => ({
+    opacity: pendingPulseOpacity.value,
+  }));
+
+  useEffect(() => {
+    if (bet?.status === 'pending') {
+      pendingPulseOpacity.value = withRepeat(
+        withTiming(0.5, { duration: 1000 }),
+        -1,
+        true,
+      );
+    } else {
+      cancelAnimation(pendingPulseOpacity);
+      pendingPulseOpacity.value = 1;
+    }
+  }, [bet?.status]);
+
   const fetchBet = useCallback(async () => {
     if (!betId) return;
     const { data, error } = await supabase
@@ -173,7 +212,6 @@ export default function BetDetailsScreen() {
   const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', {
     month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
   }) : '';
-  const isParlay = betType.toLowerCase().includes('parlay');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -183,112 +221,161 @@ export default function BetDetailsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Bet Details</Text>
-        </View>
+        <FadeInView delay={0} direction="bottom">
+          <View style={styles.header}>
+            <AnimatedPressable
+              style={styles.backButton}
+              onPress={() => router.back()}
+              scaleDown={0.9}
+            >
+              <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+            </AnimatedPressable>
+            <Text style={styles.headerTitle}>Bet Details</Text>
+          </View>
+        </FadeInView>
 
         {/* Status Banner Card */}
-        <View style={[styles.statusBanner, { backgroundColor: statusStyle.bgColor }]}>
-          <View style={styles.statusHeader}>
-            <View>
-              <Text style={styles.statusLabel}>STATUS</Text>
-              <Text style={[styles.statusValue, { color: statusStyle.textColor }]}>
-                {statusStyle.label}
-              </Text>
-              <Text style={styles.statusDate}>{dateStr}</Text>
-            </View>
-            <View style={[styles.statusIconCircle, { backgroundColor: statusStyle.iconBg }]}>
-              <Ionicons name={statusStyle.iconName} size={24} color={statusStyle.textColor} />
+        <FadeInView delay={80} direction="bottom">
+          <View style={[styles.statusBanner, { backgroundColor: statusStyle.bgColor }]}>
+            <View style={styles.statusHeader}>
+              <View>
+                <Text style={styles.statusLabel}>STATUS</Text>
+                <Text style={[styles.statusValue, { color: statusStyle.textColor }]}>
+                  {statusStyle.label}
+                </Text>
+                <Text style={styles.statusDate}>{dateStr}</Text>
+              </View>
+              <RAnimated.View style={bet.status === 'pending' ? pendingPulseStyle : undefined}>
+                <View style={[styles.statusIconCircle, { backgroundColor: statusStyle.iconBg }]}>
+                  <Ionicons name={statusStyle.iconName} size={24} color={statusStyle.textColor} />
+                </View>
+              </RAnimated.View>
             </View>
           </View>
-        </View>
+        </FadeInView>
 
         {/* Update Status Button */}
-        <TouchableOpacity
-          style={styles.updateStatusButton}
-          onPress={() => setShowStatusUpdate(!showStatusUpdate)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="swap-horizontal" size={16} color="#6366F1" />
-          <Text style={styles.updateStatusText}>Update Status</Text>
-        </TouchableOpacity>
+        <FadeInView delay={140} direction="none">
+          <AnimatedPressable
+            style={styles.updateStatusButton}
+            onPress={() => setShowStatusUpdate(!showStatusUpdate)}
+            scaleDown={0.95}
+          >
+            <Ionicons name="swap-horizontal" size={16} color="#6366F1" />
+            <Text style={styles.updateStatusText}>Update Status</Text>
+          </AnimatedPressable>
+        </FadeInView>
 
         {/* Status Update Pills */}
         {showStatusUpdate && (
-          <View style={styles.updateStatusContainer}>
-            <View style={styles.updatePillsRow}>
-              {(['pending', 'won', 'lost', 'void'] as BetStatus[]).map((s) => (
-                <StatusPill
-                  key={s}
-                  value={s}
-                  selected={bet.status === s}
-                  onPress={() => handleUpdateStatus(s)}
-                />
-              ))}
+          <FadeInView delay={0} direction="bottom">
+            <View style={styles.updateStatusContainer}>
+              <View style={styles.updatePillsRow}>
+                {(['pending', 'won', 'lost', 'void'] as BetStatus[]).map((s) => (
+                  <StatusPill
+                    key={s}
+                    value={s}
+                    selected={bet.status === s}
+                    onPress={() => handleUpdateStatus(s)}
+                  />
+                ))}
+              </View>
+              {updatingStatus && (
+                <ActivityIndicator size="small" color="#6366F1" style={{ marginTop: 8 }} />
+              )}
             </View>
-            {updatingStatus && (
-              <ActivityIndicator size="small" color="#6366F1" style={{ marginTop: 8 }} />
-            )}
-          </View>
+          </FadeInView>
         )}
 
         {/* Sportsbook & Wager Info Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.sportsbookHeader}>
-            <View style={styles.sportsbookIcon}>
-              <Ionicons name="logo-usd" size={22} color="#10B981" />
+        <FadeInView delay={160} direction="bottom">
+          <View style={styles.infoCard}>
+            <View style={styles.sportsbookHeader}>
+              <View style={styles.sportsbookIcon}>
+                <Ionicons name="logo-usd" size={22} color="#10B981" />
+              </View>
+              <View style={styles.sportsbookInfo}>
+                <Text style={styles.sportsbookName}>{bet.sportsbook || 'Unknown'}</Text>
+                <Text style={styles.sportsbookType}>{betType}</Text>
+              </View>
             </View>
-            <View style={styles.sportsbookInfo}>
-              <Text style={styles.sportsbookName}>{bet.sportsbook || 'Unknown'}</Text>
-              <Text style={styles.sportsbookType}>{betType}</Text>
+
+            <View style={styles.divider} />
+
+            <View style={styles.statsRow}>
+              <View style={styles.statColumn}>
+                <Text style={styles.statLabel}>WAGER</Text>
+                <Text style={styles.statValue}>${bet.wager}</Text>
+              </View>
+              <View style={styles.statColumn}>
+                <Text style={styles.statLabel}>PAYOUT</Text>
+                <Text style={styles.statValue}>${(bet.potential_payout || 0).toFixed(2)}</Text>
+              </View>
+              <View style={[styles.statColumn, styles.statColumnRight]}>
+                <Text style={styles.statLabel}>ROI</Text>
+                <Text style={styles.roiValue}>+{roiPct}%</Text>
+              </View>
             </View>
           </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.statsRow}>
-            <View style={styles.statColumn}>
-              <Text style={styles.statLabel}>WAGER</Text>
-              <Text style={styles.statValue}>${bet.wager}</Text>
-            </View>
-            <View style={styles.statColumn}>
-              <Text style={styles.statLabel}>PAYOUT</Text>
-              <Text style={styles.statValue}>${(bet.potential_payout || 0).toFixed(2)}</Text>
-            </View>
-            <View style={[styles.statColumn, styles.statColumnRight]}>
-              <Text style={styles.statLabel}>ROI</Text>
-              <Text style={styles.roiValue}>+{roiPct}%</Text>
-            </View>
-          </View>
-        </View>
+        </FadeInView>
 
         {/* Description Card (if exists) */}
         {bet.description ? (
-          <View style={styles.notesCard}>
-            <View style={styles.notesHeader}>
-              <Ionicons name="baseball-outline" size={20} color="#6366F1" />
-              <Text style={styles.notesTitle}>Pick</Text>
+          <FadeInView delay={220} direction="bottom">
+            <View style={styles.notesCard}>
+              <View style={styles.notesHeader}>
+                <Ionicons name="baseball-outline" size={20} color="#6366F1" />
+                <Text style={styles.notesTitle}>Pick</Text>
+              </View>
+              <Text style={styles.notesText}>{bet.description}</Text>
+              {bet.matchup ? <Text style={[styles.notesText, { marginTop: 4, color: '#9CA3AF' }]}>{bet.matchup}</Text> : null}
             </View>
-            <Text style={styles.notesText}>{bet.description}</Text>
-            {bet.matchup ? <Text style={[styles.notesText, { marginTop: 4, color: '#9CA3AF' }]}>{bet.matchup}</Text> : null}
-          </View>
+          </FadeInView>
         ) : null}
+
+        {/* Parlay Legs */}
+        {bet.bet_type === 'parlay' && Array.isArray(bet.parlay_legs) && bet.parlay_legs.length > 0 && (
+          <FadeInView delay={280} direction="bottom">
+            <View style={styles.parlayLegsCard}>
+              <View style={styles.parlayLegsHeader}>
+                <Text style={styles.parlayLegsTitle}>Parlay Legs</Text>
+                <Text style={styles.parlayLegsCount}> ({bet.parlay_legs.length})</Text>
+              </View>
+              {bet.parlay_legs.map((leg: any, index: number) => {
+                const legStyle = getLegStatusStyle(leg.status);
+                return (
+                  <FadeInView key={index} delay={index * 80} direction="bottom">
+                    <AnimatedPressable style={styles.legCard} scaleDown={0.97}>
+                      <View style={styles.legCardInner}>
+                        <View style={styles.legInfo}>
+                          <Text style={styles.legDescription}>{leg.description}</Text>
+                          <Text style={styles.legOdds}>{leg.odds}</Text>
+                        </View>
+                        <View style={[styles.legStatusPill, { backgroundColor: legStyle.pillBg }]}>
+                          <Text style={[styles.legStatusText, { color: legStyle.pillText }]}>
+                            {leg.status === 'won' ? 'win' : leg.status === 'lost' ? 'loss' : 'pending'}
+                          </Text>
+                        </View>
+                      </View>
+                    </AnimatedPressable>
+                  </FadeInView>
+                );
+              })}
+            </View>
+          </FadeInView>
+        )}
 
         {/* Notes Card */}
         {bet.notes ? (
-          <View style={styles.notesCard}>
-            <View style={styles.notesHeader}>
-              <Ionicons name="document-text-outline" size={20} color="#6366F1" />
-              <Text style={styles.notesTitle}>Notes</Text>
+          <FadeInView delay={360} direction="bottom">
+            <View style={styles.notesCard}>
+              <View style={styles.notesHeader}>
+                <Ionicons name="document-text-outline" size={20} color="#6366F1" />
+                <Text style={styles.notesTitle}>Notes</Text>
+              </View>
+              <Text style={styles.notesText}>{bet.notes}</Text>
             </View>
-            <Text style={styles.notesText}>{bet.notes}</Text>
-          </View>
+          </FadeInView>
         ) : null}
       </ScrollView>
     </SafeAreaView>
@@ -490,5 +577,63 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: '#6B6B6B',
+  },
+  parlayLegsCard: {
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+  },
+  parlayLegsHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 16,
+  },
+  parlayLegsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  parlayLegsCount: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#6B7280',
+  },
+  legCard: {
+    backgroundColor: '#1C2333',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2A3347',
+    marginBottom: 12,
+  },
+  legCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  legInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  legDescription: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  legOdds: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#9CA3AF',
+  },
+  legStatusPill: {
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  legStatusText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

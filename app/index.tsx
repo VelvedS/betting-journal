@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  SafeAreaView,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { useAuth } from '@/context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '@/context/AuthContext';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from 'react-native';
+import AnimatedPressable from '@/components/AnimatedPressable';
+import FadeInView from '@/components/FadeInView';
 
 export default function LoginScreen() {
   const { signIn, session, isLoading: authLoading } = useAuth();
@@ -59,60 +59,69 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Enter your credentials to continue</Text>
-        </View>
+        <FadeInView delay={0} direction="bottom">
+          <View style={styles.header}>
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>Enter your credentials to continue</Text>
+          </View>
+        </FadeInView>
 
         {/* Form */}
         <View style={styles.form}>
           {/* Email Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>EMAIL</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="your@email.com"
-              placeholderTextColor="#B0B0B0"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          {/* Password Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>PASSWORD</Text>
-            <View style={styles.passwordContainer}>
+          <FadeInView delay={100} direction="bottom">
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>EMAIL</Text>
               <TextInput
-                style={styles.passwordInput}
-                placeholder="••••••••"
+                style={styles.input}
+                placeholder="your@email.com"
                 placeholderTextColor="#B0B0B0"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={24}
-                  color="#71717A"
-                />
-              </TouchableOpacity>
             </View>
-          </View>
+          </FadeInView>
+
+          {/* Password Input */}
+          <FadeInView delay={200} direction="bottom">
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>PASSWORD</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#B0B0B0"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <AnimatedPressable
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  scaleDown={0.88}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={24}
+                    color="#71717A"
+                  />
+                </AnimatedPressable>
+              </View>
+            </View>
+          </FadeInView>
 
           {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-          </TouchableOpacity>
+          <FadeInView delay={280} direction="none">
+            <AnimatedPressable style={styles.forgotPassword} scaleDown={0.94}>
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </AnimatedPressable>
+          </FadeInView>
 
           {/* Error Message */}
           {errorMsg ? (
@@ -123,78 +132,94 @@ export default function LoginScreen() {
           ) : null}
 
           {/* Sign In Button */}
-          <TouchableOpacity
-            style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.signInButtonText}>Sign In</Text>
-            )}
-          </TouchableOpacity>
+          <FadeInView delay={320} direction="bottom">
+            <AnimatedPressable
+              style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
+              onPress={handleLogin}
+              disabled={isLoading}
+              scaleDown={0.97}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.signInButtonText}>Sign In</Text>
+              )}
+            </AnimatedPressable>
+          </FadeInView>
         </View>
 
         {/* Divider */}
-        <View style={styles.dividerContainer}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
-          <View style={styles.dividerLine} />
-        </View>
+        <FadeInView delay={380} direction="none">
+          <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+            <View style={styles.dividerLine} />
+          </View>
+        </FadeInView>
 
         {/* Social Login Buttons */}
-        <View style={styles.socialButtons}>
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={() => handleSocialLogin('Apple')}
-          >
-            <View style={styles.appleIcon}>
-              <Ionicons name="logo-apple" size={20} color="#18181B" />
-            </View>
-            <Text style={styles.socialButtonText}>Continue with Apple</Text>
-          </TouchableOpacity>
+        <FadeInView delay={420} direction="bottom">
+          <View style={styles.socialButtons}>
+            <AnimatedPressable
+              style={styles.socialButton}
+              onPress={() => handleSocialLogin('Apple')}
+              scaleDown={0.97}
+            >
+              <View style={styles.appleIcon}>
+                <Ionicons name="logo-apple" size={20} color="#18181B" />
+              </View>
+              <Text style={styles.socialButtonText}>Continue with Apple</Text>
+            </AnimatedPressable>
 
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={() => handleSocialLogin('Google')}
-          >
-            <View style={styles.googleIconContainer}>
-              <Text style={styles.googleIcon}>G</Text>
-            </View>
-            <Text style={styles.socialButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
+            <AnimatedPressable
+              style={styles.socialButton}
+              onPress={() => handleSocialLogin('Google')}
+              scaleDown={0.97}
+            >
+              <View style={styles.googleIconContainer}>
+                <Text style={styles.googleIcon}>G</Text>
+              </View>
+              <Text style={styles.socialButtonText}>Continue with Google</Text>
+            </AnimatedPressable>
 
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={() => handleSocialLogin('Facebook')}
-          >
-            <View style={styles.facebookIconContainer}>
-              <Ionicons name="logo-facebook" size={20} color="#1877F2" />
-            </View>
-            <Text style={styles.socialButtonText}>Continue with Facebook</Text>
-          </TouchableOpacity>
-        </View>
+            <AnimatedPressable
+              style={styles.socialButton}
+              onPress={() => handleSocialLogin('Facebook')}
+              scaleDown={0.97}
+            >
+              <View style={styles.facebookIconContainer}>
+                <Ionicons name="logo-facebook" size={20} color="#1877F2" />
+              </View>
+              <Text style={styles.socialButtonText}>Continue with Facebook</Text>
+            </AnimatedPressable>
+          </View>
+        </FadeInView>
 
         {/* OR Divider */}
-        <Text style={styles.orText}>OR</Text>
+        <FadeInView delay={460} direction="none">
+          <Text style={styles.orText}>OR</Text>
+        </FadeInView>
 
         {/* Sign Up Link */}
-        <View style={styles.signUpContainer}>
-          <Text style={styles.signUpText}>Don't have an account? </Text>
-          <Link href="/signup" asChild>
-            <TouchableOpacity>
-              <Text style={styles.signUpLink}>Sign up</Text>
-            </TouchableOpacity>
-          </Link>
-        </View>
+        <FadeInView delay={500} direction="bottom">
+          <View style={styles.signUpContainer}>
+            <Text style={styles.signUpText}>Don't have an account? </Text>
+            <Link href="/signup" asChild>
+              <AnimatedPressable scaleDown={0.94}>
+                <Text style={styles.signUpLink}>Sign up</Text>
+              </AnimatedPressable>
+            </Link>
+          </View>
+        </FadeInView>
 
         {/* Quote */}
-        <View style={styles.quoteContainer}>
-          <Text style={styles.quoteText}>
-            "In trading and betting, discipline beats emotion every time."
-          </Text>
-        </View>
+        <FadeInView delay={560} direction="bottom">
+          <View style={styles.quoteContainer}>
+            <Text style={styles.quoteText}>
+              "In trading and betting, discipline beats emotion every time."
+            </Text>
+          </View>
+        </FadeInView>
       </ScrollView>
     </SafeAreaView>
   );
@@ -337,6 +362,7 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 20,
   },
+
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',

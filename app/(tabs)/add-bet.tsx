@@ -5,7 +5,17 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated as RNAnimated, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import AnimatedPressable from '@/components/AnimatedPressable';
+import FadeInView from '@/components/FadeInView';
 
 type ScreenState = 'default' | 'processing' | 'success' | 'error';
 
@@ -18,12 +28,28 @@ export default function AddBetScreen() {
   const [extractedData, setExtractedData] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  // Animation values
-  const spinValue = useRef(new Animated.Value(0)).current;
-  const checkmarkScale = useRef(new Animated.Value(0)).current;
-  const step1Opacity = useRef(new Animated.Value(0)).current;
-  const step2Opacity = useRef(new Animated.Value(0)).current;
-  const step3Opacity = useRef(new Animated.Value(0)).current;
+  // RN Animation values (existing)
+  const checkmarkScale = useRef(new RNAnimated.Value(0)).current;
+  const step1Opacity = useRef(new RNAnimated.Value(0)).current;
+  const step2Opacity = useRef(new RNAnimated.Value(0)).current;
+  const step3Opacity = useRef(new RNAnimated.Value(0)).current;
+
+  // Reanimated shared values for new effects
+  const pulseScale = useSharedValue(1);
+  const errorShakeX = useSharedValue(0);
+  const spinRotation = useSharedValue(0);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
+
+  const errorShakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: errorShakeX.value }],
+  }));
+
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${spinRotation.value}deg` }],
+  }));
 
   useEffect(() => {
     if (screen === 'processing') {
@@ -33,20 +59,14 @@ export default function AddBetScreen() {
       step2Opacity.setValue(0);
       step3Opacity.setValue(0);
 
-      // Start spinning animation
-      spinValue.setValue(0);
-      Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        })
-      ).start();
+      // Start spinning animation (infinite loop on UI thread)
+      spinRotation.value = 0;
+      spinRotation.value = withRepeat(withTiming(360, { duration: 2000 }), -1, false);
 
       // Animate steps sequentially
       setTimeout(() => {
         setVisibleSteps(1);
-        Animated.timing(step1Opacity, {
+        RNAnimated.timing(step1Opacity, {
           toValue: 1,
           duration: 400,
           useNativeDriver: true,
@@ -55,7 +75,7 @@ export default function AddBetScreen() {
 
       setTimeout(() => {
         setVisibleSteps(2);
-        Animated.timing(step2Opacity, {
+        RNAnimated.timing(step2Opacity, {
           toValue: 1,
           duration: 400,
           useNativeDriver: true,
@@ -64,16 +84,26 @@ export default function AddBetScreen() {
 
       setTimeout(() => {
         setVisibleSteps(3);
-        Animated.timing(step3Opacity, {
+        RNAnimated.timing(step3Opacity, {
           toValue: 1,
           duration: 400,
           useNativeDriver: true,
         }).start();
       }, 2200);
+
+      // Pulse the processing card
+      pulseScale.value = withRepeat(withTiming(1.03, { duration: 900 }), -1, true);
+
+      return () => {
+        cancelAnimation(pulseScale);
+        pulseScale.value = 1;
+        cancelAnimation(spinRotation);
+        spinRotation.value = 0;
+      };
     } else if (screen === 'success') {
       // Checkmark pop-in animation
       checkmarkScale.setValue(0);
-      Animated.spring(checkmarkScale, {
+      RNAnimated.spring(checkmarkScale, {
         toValue: 1,
         tension: 50,
         friction: 7,
@@ -86,6 +116,15 @@ export default function AddBetScreen() {
       }, 1500);
 
       return () => clearTimeout(timer);
+    } else if (screen === 'error') {
+      // Shake the error card on mount
+      errorShakeX.value = withSequence(
+        withTiming(-8, { duration: 60 }),
+        withTiming(8, { duration: 60 }),
+        withTiming(-6, { duration: 60 }),
+        withTiming(6, { duration: 60 }),
+        withTiming(0, { duration: 60 }),
+      );
     }
   }, [screen]);
 
@@ -301,11 +340,6 @@ export default function AddBetScreen() {
     setScreen('default');
   };
 
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
   if (screen === 'processing') {
     return (
       <SafeAreaView style={styles.container}>
@@ -319,14 +353,9 @@ export default function AddBetScreen() {
 
           {/* Processing Card - Centered */}
           <View style={styles.centeredCardContainer}>
-            <View style={styles.processingCard}>
+            <Animated.View style={[styles.processingCard, pulseStyle]}>
               {/* Spinning Circle with AI Icon */}
-              <Animated.View
-                style={[
-                  styles.spinningCircle,
-                  { transform: [{ rotate: spin }] },
-                ]}
-              >
+              <Animated.View style={[styles.spinningCircle, spinStyle]}>
                 <View style={styles.spinningCircleInner} />
               </Animated.View>
               <View style={styles.aiIconContainer}>
@@ -341,25 +370,25 @@ export default function AddBetScreen() {
               {/* Status Steps */}
               <View style={styles.stepsContainer}>
                 {visibleSteps >= 1 && (
-                  <Animated.View style={[styles.stepRow, { opacity: step1Opacity }]}>
+                  <RNAnimated.View style={[styles.stepRow, { opacity: step1Opacity }]}>
                     <View style={styles.stepDot} />
                     <Text style={styles.stepText}>Reading ticket image</Text>
-                  </Animated.View>
+                  </RNAnimated.View>
                 )}
                 {visibleSteps >= 2 && (
-                  <Animated.View style={[styles.stepRow, { opacity: step2Opacity }]}>
+                  <RNAnimated.View style={[styles.stepRow, { opacity: step2Opacity }]}>
                     <View style={styles.stepDot} />
                     <Text style={styles.stepText}>Identifying wager amount</Text>
-                  </Animated.View>
+                  </RNAnimated.View>
                 )}
                 {visibleSteps >= 3 && (
-                  <Animated.View style={[styles.stepRow, { opacity: step3Opacity }]}>
+                  <RNAnimated.View style={[styles.stepRow, { opacity: step3Opacity }]}>
                     <View style={styles.stepDot} />
                     <Text style={styles.stepText}>Extracting parlay legs</Text>
-                  </Animated.View>
+                  </RNAnimated.View>
                 )}
               </View>
-            </View>
+            </Animated.View>
           </View>
         </View>
       </SafeAreaView>
@@ -370,10 +399,10 @@ export default function AddBetScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
-        <TouchableOpacity 
-          style={styles.fullScreenContainer} 
-          activeOpacity={1}
+        <AnimatedPressable
+          style={styles.fullScreenContainer}
           onPress={handleSuccessTap}
+          scaleDown={1}
         >
           {/* Header */}
           <View style={styles.header}>
@@ -385,7 +414,7 @@ export default function AddBetScreen() {
           <View style={styles.centeredCardContainer}>
             <View style={styles.successCard}>
               {/* Success Checkmark Icon */}
-              <Animated.View
+              <RNAnimated.View
                 style={[
                   styles.successIconContainer,
                   { transform: [{ scale: checkmarkScale }] },
@@ -394,7 +423,7 @@ export default function AddBetScreen() {
                 <View style={styles.checkmarkCircle}>
                   <Ionicons name="checkmark-circle" size={40} color="#10B981" />
                 </View>
-              </Animated.View>
+              </RNAnimated.View>
 
               <Text style={styles.successTitle}>Bet Logged Successfully</Text>
               <Text style={styles.successDescription}>
@@ -402,7 +431,7 @@ export default function AddBetScreen() {
               </Text>
             </View>
           </View>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </SafeAreaView>
     );
   }
@@ -420,7 +449,7 @@ export default function AddBetScreen() {
 
           {/* Error Card - Centered */}
           <View style={styles.centeredCardContainer}>
-            <View style={styles.errorCard}>
+            <Animated.View style={[styles.errorCard, errorShakeStyle]}>
               {/* Error Icon */}
               <View style={styles.errorIconContainer}>
                 <Ionicons name="alert-circle" size={40} color="#E85D5D" />
@@ -431,23 +460,23 @@ export default function AddBetScreen() {
 
               {/* Buttons */}
               <View style={styles.errorButtonsContainer}>
-                <TouchableOpacity
+                <AnimatedPressable
                   style={styles.errorRetryButton}
-                  activeOpacity={0.7}
                   onPress={handleRetryUpload}
+                  scaleDown={0.97}
                 >
                   <Text style={styles.errorRetryButtonText}>Try Again</Text>
-                </TouchableOpacity>
+                </AnimatedPressable>
 
-                <TouchableOpacity
+                <AnimatedPressable
                   style={styles.errorManualButton}
-                  activeOpacity={0.7}
                   onPress={handleEnterManually}
+                  scaleDown={0.97}
                 >
                   <Text style={styles.errorManualButtonText}>Enter Manually</Text>
-                </TouchableOpacity>
+                </AnimatedPressable>
               </View>
-            </View>
+            </Animated.View>
           </View>
         </View>
       </SafeAreaView>
@@ -460,62 +489,74 @@ export default function AddBetScreen() {
       <StatusBar style="dark" />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header Section */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Add Your Bet</Text>
-          <Text style={styles.subtitle}>Scan your betting slips to auto-log your trades</Text>
-        </View>
+        <FadeInView delay={0} direction="bottom">
+          <View style={styles.header}>
+            <Text style={styles.title}>Add Your Bet</Text>
+            <Text style={styles.subtitle}>Scan your betting slips to auto-log your trades</Text>
+          </View>
+        </FadeInView>
 
         {/* Card 1 - Upload Betting Slip (Primary Action) */}
-        <TouchableOpacity style={styles.uploadCard} activeOpacity={0.7} onPress={handlePickImage}>
-          <View style={styles.uploadIconCircle}>
-            <Ionicons name="cloud-upload-outline" size={32} color="#6B6B6B" />
-          </View>
-          <Text style={styles.uploadCardTitle}>Upload Betting Slip</Text>
-          <Text style={styles.uploadCardDescription}>
-            Take a screenshot or upload an image of your betting slip
-          </Text>
-        </TouchableOpacity>
+        <FadeInView delay={80} direction="bottom">
+          <AnimatedPressable style={styles.uploadCard} onPress={handlePickImage} scaleDown={0.97}>
+            <View style={styles.uploadIconCircle}>
+              <Ionicons name="cloud-upload-outline" size={32} color="#6B6B6B" />
+            </View>
+            <Text style={styles.uploadCardTitle}>Upload Betting Slip</Text>
+            <Text style={styles.uploadCardDescription}>
+              Take a screenshot or upload an image of your betting slip
+            </Text>
+          </AnimatedPressable>
+        </FadeInView>
 
         {/* Card 2 - Take a Photo (Secondary Action) */}
-        <TouchableOpacity style={styles.compactCard} activeOpacity={0.7} onPress={handleTakePhoto}>
-          <View style={styles.compactIconCircle}>
-            <Ionicons name="camera-outline" size={24} color="#6B6B6B" />
-          </View>
-          <View style={styles.compactTextContainer}>
-            <Text style={styles.compactCardTitle}>Take a Photo</Text>
-            <Text style={styles.compactCardDescription}>Capture physical betting slip</Text>
-          </View>
-        </TouchableOpacity>
+        <FadeInView delay={140} direction="bottom">
+          <AnimatedPressable style={styles.compactCard} onPress={handleTakePhoto} scaleDown={0.97}>
+            <View style={styles.compactIconCircle}>
+              <Ionicons name="camera-outline" size={24} color="#6B6B6B" />
+            </View>
+            <View style={styles.compactTextContainer}>
+              <Text style={styles.compactCardTitle}>Take a Photo</Text>
+              <Text style={styles.compactCardDescription}>Capture physical betting slip</Text>
+            </View>
+          </AnimatedPressable>
+        </FadeInView>
 
         {/* Divider Section with OR */}
-        <View style={styles.dividerContainer}>
-          <View style={styles.dividerLine} />
-          <View style={styles.dividerTextContainer}>
-            <Text style={styles.dividerText}>OR</Text>
+        <FadeInView delay={180} direction="none">
+          <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <View style={styles.dividerTextContainer}>
+              <Text style={styles.dividerText}>OR</Text>
+            </View>
           </View>
-        </View>
+        </FadeInView>
 
         {/* Card 3 - Manually Add Your Bet */}
-        <TouchableOpacity style={styles.compactCard} activeOpacity={0.7} onPress={() => router.push('/manual-add-bet')}>
-          <View style={styles.compactIconCircle}>
-            <Ionicons name="add-outline" size={28} color="#6B6B6B" />
-          </View>
-          <View style={styles.compactTextContainer}>
-            <Text style={styles.compactCardTitle}>Manually Add Your Bet</Text>
-            <Text style={styles.compactCardDescription}>Enter bet details by hand</Text>
-          </View>
-        </TouchableOpacity>
+        <FadeInView delay={220} direction="bottom">
+          <AnimatedPressable style={styles.compactCard} onPress={() => router.push('/manual-add-bet')} scaleDown={0.97}>
+            <View style={styles.compactIconCircle}>
+              <Ionicons name="add-outline" size={28} color="#6B6B6B" />
+            </View>
+            <View style={styles.compactTextContainer}>
+              <Text style={styles.compactCardTitle}>Manually Add Your Bet</Text>
+              <Text style={styles.compactCardDescription}>Enter bet details by hand</Text>
+            </View>
+          </AnimatedPressable>
+        </FadeInView>
 
         {/* Card 4 - AI-Powered Recognition (Info Card) */}
-        <View style={styles.infoCard}>
-          <Ionicons name="sparkles" size={20} color="#6366F1" style={styles.infoIcon} />
-          <View style={styles.infoTextContainer}>
-            <Text style={styles.infoCardTitle}>AI-Powered Recognition</Text>
-            <Text style={styles.infoCardDescription}>
-              Our smart scanner automatically extracts wager amount, odds, parlay legs, and calculates potential payout from your betting slips.
-            </Text>
+        <FadeInView delay={280} direction="bottom">
+          <View style={styles.infoCard}>
+            <Ionicons name="sparkles" size={20} color="#6366F1" style={styles.infoIcon} />
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoCardTitle}>AI-Powered Recognition</Text>
+              <Text style={styles.infoCardDescription}>
+                Our smart scanner automatically extracts wager amount, odds, parlay legs, and calculates potential payout from your betting slips.
+              </Text>
+            </View>
           </View>
-        </View>
+        </FadeInView>
       </ScrollView>
     </SafeAreaView>
   );
@@ -539,7 +580,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
   },
-  
+
   // Header Section
   header: {
     marginBottom: 32,

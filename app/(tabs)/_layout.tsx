@@ -1,18 +1,19 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AnimatedPressable from '@/components/AnimatedPressable';
 
 const ACTIVE_COLOR = '#1A1A2E';
 const INACTIVE_COLOR = '#B0B0B0';
 
 function AddBetButton({ onPress }: { onPress: () => void }) {
   return (
-    <TouchableOpacity style={styles.addBetButton} onPress={onPress} activeOpacity={0.8}>
+    <AnimatedPressable style={styles.addBetButton} onPress={onPress} scaleDown={0.92}>
       <View style={styles.addBetCircle}>
         <Ionicons name="add" size={28} color="#FFFFFF" />
       </View>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
