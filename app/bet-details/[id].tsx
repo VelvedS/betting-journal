@@ -31,11 +31,11 @@ type BetStatus = 'pending' | 'won' | 'lost' | 'void';
 const getLegStatusStyle = (status: string) => {
   switch (status) {
     case 'won':
-      return { pillBg: '#1B3A2D', pillText: '#86EFAC' };
+      return { pillBg: '#E8F5E9', pillText: '#00C853' };
     case 'lost':
-      return { pillBg: '#3B1515', pillText: '#FCA5A5' };
+      return { pillBg: '#FFEBEE', pillText: '#FF3B30' };
     default:
-      return { pillBg: '#2D3748', pillText: '#9CA3AF' };
+      return { pillBg: '#F5F5F5', pillText: '#999999' };
   }
 };
 
@@ -122,6 +122,7 @@ export default function BetDetailsScreen() {
   const { user } = useAuth();
   const { id } = useLocalSearchParams();
   const [bet, setBet] = useState<any>(null);
+  const [parlayLegs, setParlayLegs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showStatusUpdate, setShowStatusUpdate] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -149,12 +150,12 @@ export default function BetDetailsScreen() {
 
   const fetchBet = useCallback(async () => {
     if (!betId) return;
-    const { data, error } = await supabase
-      .from('bets')
-      .select('*')
-      .eq('id', betId)
-      .single();
-    if (data) setBet(data);
+    const [betResult, legsResult] = await Promise.all([
+      supabase.from('bets').select('*').eq('id', betId).single(),
+      supabase.from('parlay_legs').select('*').eq('bet_id', betId).order('order', { ascending: true }),
+    ]);
+    if (betResult.data) setBet(betResult.data);
+    if (legsResult.data) setParlayLegs(legsResult.data);
     setLoading(false);
   }, [betId]);
 
@@ -208,6 +209,7 @@ export default function BetDetailsScreen() {
 
   const statusStyle = getStatusStyling(bet.status);
   const betType = bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : '';
+
   const roiPct = bet.wager > 0 ? (((bet.potential_payout || 0) - bet.wager) / bet.wager * 100).toFixed(0) : '0';
   const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', {
     month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -319,33 +321,33 @@ export default function BetDetailsScreen() {
           </View>
         </FadeInView>
 
-        {/* Description Card (if exists) */}
-        {bet.description ? (
+        {/* Pick — only shown when there are no parlay legs */}
+        {parlayLegs.length === 0 && (
           <FadeInView delay={220} direction="bottom">
             <View style={styles.notesCard}>
               <View style={styles.notesHeader}>
                 <Ionicons name="baseball-outline" size={20} color="#6366F1" />
                 <Text style={styles.notesTitle}>Pick</Text>
               </View>
-              <Text style={styles.notesText}>{bet.description}</Text>
+              <Text style={styles.notesText}>{bet.description || '—'}</Text>
               {bet.matchup ? <Text style={[styles.notesText, { marginTop: 4, color: '#9CA3AF' }]}>{bet.matchup}</Text> : null}
             </View>
           </FadeInView>
-        ) : null}
+        )}
 
-        {/* Parlay Legs */}
-        {bet.bet_type === 'parlay' && Array.isArray(bet.parlay_legs) && bet.parlay_legs.length > 0 && (
+        {/* Parlay Legs — shown whenever valid legs exist */}
+        {parlayLegs.length > 0 && (
           <FadeInView delay={280} direction="bottom">
             <View style={styles.parlayLegsCard}>
               <View style={styles.parlayLegsHeader}>
                 <Text style={styles.parlayLegsTitle}>Parlay Legs</Text>
-                <Text style={styles.parlayLegsCount}> ({bet.parlay_legs.length})</Text>
+                <Text style={styles.parlayLegsCount}> ({parlayLegs.length})</Text>
               </View>
-              {bet.parlay_legs.map((leg: any, index: number) => {
+              {parlayLegs.map((leg: any, index: number) => {
                 const legStyle = getLegStatusStyle(leg.status);
                 return (
-                  <FadeInView key={index} delay={index * 80} direction="bottom">
-                    <AnimatedPressable style={styles.legCard} scaleDown={0.97}>
+                  <FadeInView key={leg.id ?? index} delay={index * 80} direction="bottom">
+                    <View style={styles.legCard}>
                       <View style={styles.legCardInner}>
                         <View style={styles.legInfo}>
                           <Text style={styles.legDescription}>{leg.description}</Text>
@@ -353,11 +355,11 @@ export default function BetDetailsScreen() {
                         </View>
                         <View style={[styles.legStatusPill, { backgroundColor: legStyle.pillBg }]}>
                           <Text style={[styles.legStatusText, { color: legStyle.pillText }]}>
-                            {leg.status === 'won' ? 'win' : leg.status === 'lost' ? 'loss' : 'pending'}
+                            {leg.status === 'won' ? 'Win' : leg.status === 'lost' ? 'Loss' : 'Pending'}
                           </Text>
                         </View>
                       </View>
-                    </AnimatedPressable>
+                    </View>
                   </FadeInView>
                 );
               })}
@@ -579,10 +581,14 @@ const styles = StyleSheet.create({
     color: '#6B6B6B',
   },
   parlayLegsCard: {
-    backgroundColor: '#111827',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
     padding: 20,
     marginBottom: 16,
+    boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
+    elevation: 2,
   },
   parlayLegsHeader: {
     flexDirection: 'row',
@@ -592,19 +598,19 @@ const styles = StyleSheet.create({
   parlayLegsTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
   },
   parlayLegsCount: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#6B7280',
+    color: '#9CA3AF',
   },
   legCard: {
-    backgroundColor: '#1C2333',
-    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2A3347',
-    marginBottom: 12,
+    borderColor: '#E5E5E5',
+    marginBottom: 10,
   },
   legCardInner: {
     flexDirection: 'row',
@@ -619,7 +625,7 @@ const styles = StyleSheet.create({
   legDescription: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
     marginBottom: 4,
   },
   legOdds: {

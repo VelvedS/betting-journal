@@ -494,10 +494,10 @@ export default function ManualAddBetScreen() {
           await supabase.from('parlay_legs').insert(
             parlayLegs.map((leg: any, idx: number) => ({
               bet_id: data.id,
-              pick: leg.description || '',
+              description: leg.description || '',
               odds: leg.odds || '',
               status: leg.status || 'pending',
-              leg_number: idx + 1,
+              order: idx + 1,
             }))
           );
         } catch (err) {

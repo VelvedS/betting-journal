@@ -14,6 +14,8 @@ serve(async (req) => {
 
   try {
     const { image_url, user_id } = await req.json()
+    console.log('DEBUG image_url received:', image_url)
+    console.log('DEBUG user_id received:', user_id)
 
     if (!image_url || !user_id) {
       return new Response(
@@ -28,14 +30,22 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Extract file path from the full URL
-    const urlParts = image_url.split('betting-slips/')
-    const filePath = urlParts[urlParts.length - 1]
+    // Extract file path — handle raw storage path or full public URL
+    let filePath = image_url
+    if (image_url.includes('betting-slips/')) {
+      const urlParts = image_url.split('betting-slips/')
+      filePath = urlParts[urlParts.length - 1]
+    }
+    console.log('DEBUG filePath extracted:', filePath)
 
     const { data: fileData, error: downloadError } = await supabaseAdmin
       .storage
       .from('betting-slips')
       .download(filePath)
+
+    console.log('DEBUG download error:', downloadError)
+    console.log('DEBUG fileData exists:', !!fileData)
+    console.log('DEBUG fileData size:', fileData?.size)
 
     if (downloadError || !fileData) {
       return new Response(
@@ -44,15 +54,22 @@ serve(async (req) => {
       )
     }
 
+    console.log('DEBUG fileData type:', typeof fileData)
+    console.log('DEBUG fileData constructor:', fileData?.constructor?.name)
+    console.log('DEBUG fileData size:', fileData?.size)
+
     const arrayBuffer = await fileData.arrayBuffer()
-    const uint8Array = new Uint8Array(arrayBuffer)
-    let binaryString = ''
+    const bytes = new Uint8Array(arrayBuffer)
+    let binary = ''
     const chunkSize = 8192
-    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.subarray(i, i + chunkSize)
-      binaryString += String.fromCharCode.apply(null, Array.from(chunk))
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
+      for (let j = 0; j < chunk.length; j++) {
+        binary += String.fromCharCode(chunk[j])
+      }
     }
-    const base64Image = btoa(binaryString)
+    const base64Image = btoa(binary)
+    console.log('DEBUG base64 length after fix:', base64Image.length)
     const contentType = fileData.type || 'image/jpeg'
 
     // Call Claude Vision API

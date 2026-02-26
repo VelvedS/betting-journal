@@ -40,8 +40,8 @@ function getPeriodCutoff(period: TimePeriod): Date {
       return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     case 'Monthly':
       return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    case 'Yearly':
-      return new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    case 'Lifetime':
+      return new Date(0);
   }
 }
 
@@ -85,6 +85,7 @@ export default function HomeScreen() {
       .select('*')
       .eq('user_id', user.id)
       .order('placed_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(5);
     setRecentBets(recent || []);
 
@@ -92,7 +93,8 @@ export default function HomeScreen() {
       .from('bets')
       .select('id, status, wager, potential_payout, placed_at, created_at')
       .eq('user_id', user.id)
-      .order('placed_at', { ascending: true });
+      .order('placed_at', { ascending: false })
+      .order('created_at', { ascending: false });
     if (allError) console.error('[Dashboard] allBets fetch error:', allError);
     setAllBets(all || []);
   }, [user]);
@@ -204,7 +206,7 @@ export default function HomeScreen() {
         {/* Time Period Tabs */}
         <FadeInView delay={160} direction="bottom">
           <View style={styles.tabsContainer}>
-            {(['Daily', 'Weekly', 'Monthly', 'Yearly'] as TimePeriod[]).map(
+            {(['Daily', 'Weekly', 'Monthly', 'Lifetime'] as TimePeriod[]).map(
               (period) => (
                 <AnimatedPressable
                   key={period}
@@ -273,6 +275,7 @@ export default function HomeScreen() {
                 ? new Date(bet.placed_at).toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
+                    year: 'numeric',
                     hour: 'numeric',
                     minute: '2-digit',
                   })

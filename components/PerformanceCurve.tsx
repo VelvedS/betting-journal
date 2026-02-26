@@ -1,12 +1,19 @@
-import 'react-native-reanimated'; // must be first — ensures reanimated initializes before wagmi-charts
-import * as Haptics from 'expo-haptics';
-import * as d3Shape from 'd3-shape';
-import React, { useCallback, useMemo } from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
-import { LineChart } from 'react-native-wagmi-charts';
-import { Stop } from 'react-native-svg';
+import 'react-native-reanimated';
 
-export type TimePeriod = 'Daily' | 'Weekly' | 'Monthly' | 'Yearly';
+import React, { useMemo } from 'react';
+import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
+import { LineChart } from 'react-native-wagmi-charts';
+
+export type TimePeriod = 'Daily' | 'Weekly' | 'Monthly' | 'Lifetime';
+
+type ChartPoint = { timestamp: number; value: number };
+type XLabel = { xPos: number; text: string };
+
+// Always have ≥ 2 points so getDomain never crashes on an empty array
+const DEFAULT_DATA: ChartPoint[] = [
+  { timestamp: Date.now() - 86400000, value: 0 },
+  { timestamp: Date.now(), value: 0 },
+];
 
 interface PerformanceCurveProps {
   allBets: any[];
@@ -14,12 +21,12 @@ interface PerformanceCurveProps {
   onCursorChange?: (value: number | null) => void;
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-// scrollContent paddingHorizontal 20 + chartCard padding 20 = 40 each side = 80 total
-const CHART_WIDTH = SCREEN_WIDTH - 80;
-const CHART_HEIGHT = 220;
+const CHART_HEIGHT = 200;
+const Y_GUTTER = 20;
+const Y_AXIS_WIDTH = 44;
+const NUM_Y_LABELS = 5;
 
-function getTimeCutoff(period: TimePeriod): Date {
+function getPeriodCutoff(period: TimePeriod): Date | null {
   const now = new Date();
   switch (period) {
     case 'Daily': {
@@ -31,83 +38,131 @@ function getTimeCutoff(period: TimePeriod): Date {
       return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     case 'Monthly':
       return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    case 'Yearly':
-      return new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    case 'Lifetime':
+      return null;
   }
 }
 
-/** Returns the effective date for a bet, falling back to created_at if placed_at is absent. */
-function getBetDate(bet: any): Date | null {
-  const raw = bet.placed_at ?? bet.created_at;
-  if (!raw) return null;
-  const d = new Date(raw);
-  return isNaN(d.getTime()) ? null : d;
+function formatYLabel(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  if (abs === 0) return '$0';
+  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(1)}k`;
+  return `${sign}$${abs.toFixed(0)}`;
 }
 
-function formatXLabel(date: Date, period: TimePeriod): string {
-  if (period === 'Daily') {
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  }
-  if (period === 'Yearly') {
-    return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-  }
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
+// Build X axis labels with per-period deduplication logic.
+// xPos is a pixel offset within chartLineWidth (wagmi-charts spaces by index).
+function buildXLabels(
+  chartData: ChartPoint[],
+  period: TimePeriod,
+  chartLineWidth: number
+): XLabel[] {
+  const n = chartData.length;
+  if (n < 2) return [];
 
-function buildChartData(allBets: any[], period: TimePeriod) {
-  const cutoff = getTimeCutoff(period);
-  const now = new Date();
+  // Pixel position for data index i
+  const xAt = (i: number) => (i / (n - 1)) * chartLineWidth;
 
-  // Filter to the selected period and sort chronologically
-  const filtered = allBets
-    .filter((b) => {
-      const d = getBetDate(b);
-      return d !== null && d >= cutoff;
-    })
-    .sort((a, b) => {
-      const da = getBetDate(a)!.getTime();
-      const db = getBetDate(b)!.getTime();
-      return da - db;
-    });
-
-  if (filtered.length === 0) {
-    // Two-point flat $0 line spanning the entire period
-    return [
-      { timestamp: cutoff.getTime(), value: 0 },
-      { timestamp: now.getTime(), value: 0 },
-    ];
-  }
-
-  // Always start the line at $0 at the period boundary
-  const points: { timestamp: number; value: number }[] = [
-    { timestamp: cutoff.getTime(), value: 0 },
-  ];
-
-  let cum = 0;
-  for (const bet of filtered) {
-    if (bet.status === 'won') {
-      cum += (bet.potential_payout || 0) - (bet.wager || 0);
-    } else if (bet.status === 'lost') {
-      cum -= bet.wager || 0;
+  switch (period) {
+    case 'Daily': {
+      // Fixed clock-based slots; find nearest data point to each slot.
+      // Skip any slot whose resolved position is too close to the previous one.
+      const now = new Date();
+      const todayMs = new Date(
+        now.getFullYear(), now.getMonth(), now.getDate()
+      ).getTime();
+      const slots = [
+        { hour: 0,  label: '12AM' },
+        { hour: 6,  label: '6AM'  },
+        { hour: 12, label: '12PM' },
+        { hour: 18, label: '6PM'  },
+        { hour: 23, label: '11PM' },
+      ];
+      const result: XLabel[] = [];
+      let lastXPos = -50;
+      for (const slot of slots) {
+        const slotTs = todayMs + slot.hour * 3_600_000;
+        let closestIdx = 0, closestDiff = Infinity;
+        for (let i = 0; i < n; i++) {
+          const diff = Math.abs(chartData[i].timestamp - slotTs);
+          if (diff < closestDiff) { closestDiff = diff; closestIdx = i; }
+        }
+        const xPos = xAt(closestIdx);
+        if (xPos - lastXPos >= 35) {
+          result.push({ xPos, text: slot.label });
+          lastXPos = xPos;
+        }
+      }
+      return result;
     }
-    // pending / void bets don't shift the P&L line
-    points.push({
-      timestamp: getBetDate(bet)!.getTime(),
-      value: parseFloat(cum.toFixed(2)),
-    });
-  }
 
-  // Extend the line to "now" so the right edge is always the current moment
-  const lastTs = points[points.length - 1].timestamp;
-  if (now.getTime() - lastTs > 60 * 1000) {
-    points.push({ timestamp: now.getTime(), value: parseFloat(cum.toFixed(2)) });
-  }
+    case 'Weekly': {
+      // One label per unique calendar day, at the first occurrence of that day.
+      const seenDays = new Set<string>();
+      const result: XLabel[] = [];
+      for (let i = 0; i < n; i++) {
+        const day = new Date(chartData[i].timestamp).toLocaleDateString('en-US', {
+          weekday: 'short',
+        });
+        if (!seenDays.has(day) && result.length < 7) {
+          seenDays.add(day);
+          result.push({ xPos: xAt(i), text: day });
+        }
+      }
+      return result;
+    }
 
-  return points;
+    case 'Monthly': {
+      // ~5 evenly distributed indices; deduplicate by formatted date string.
+      const count = 5;
+      const result: XLabel[] = [];
+      const seen = new Set<string>();
+      for (let i = 0; i < count; i++) {
+        const idx = Math.round((i / (count - 1)) * (n - 1));
+        const text = new Date(chartData[idx].timestamp).toLocaleDateString('en-US', {
+          month: 'short', day: 'numeric',
+        });
+        if (!seen.has(text)) {
+          seen.add(text);
+          result.push({ xPos: xAt(idx), text });
+        }
+      }
+      return result;
+    }
+
+    case 'Lifetime': {
+      // One label per unique month, at first occurrence; max 6.
+      const seenMonths = new Set<string>();
+      const result: XLabel[] = [];
+      for (let i = 0; i < n; i++) {
+        const month = new Date(chartData[i].timestamp).toLocaleDateString('en-US', {
+          month: 'short',
+        });
+        if (!seenMonths.has(month) && result.length < 6) {
+          seenMonths.add(month);
+          result.push({ xPos: xAt(i), text: month });
+        }
+      }
+      // Fewer than 2 months of data → fall back to date labels
+      if (result.length < 2) {
+        const fallback: XLabel[] = [];
+        const seen2 = new Set<string>();
+        for (let i = 0; i < 5; i++) {
+          const idx = Math.round((i / 4) * (n - 1));
+          const text = new Date(chartData[idx].timestamp).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric',
+          });
+          if (!seen2.has(text)) {
+            seen2.add(text);
+            fallback.push({ xPos: xAt(idx), text });
+          }
+        }
+        return fallback;
+      }
+      return result;
+    }
+  }
 }
 
 export default function PerformanceCurve({
@@ -115,111 +170,192 @@ export default function PerformanceCurve({
   period,
   onCursorChange,
 }: PerformanceCurveProps) {
-  const chartData = useMemo(
-    () => buildChartData(allBets, period),
-    [allBets, period]
+  const { chartData, isEmpty } = useMemo(() => {
+    if (!allBets || allBets.length === 0) {
+      return { chartData: DEFAULT_DATA, isEmpty: true };
+    }
+
+    // Sort ascending by date
+    const sorted = [...allBets].sort((a, b) => {
+      const da = new Date(a.placed_at ?? a.created_at ?? 0).getTime();
+      const db = new Date(b.placed_at ?? b.created_at ?? 0).getTime();
+      return da - db;
+    });
+
+    // Filter by period
+    const cutoff = getPeriodCutoff(period);
+    const filtered = cutoff
+      ? sorted.filter((b) => {
+          const raw = b.placed_at ?? b.created_at;
+          if (!raw) return false;
+          const d = new Date(raw);
+          return !isNaN(d.getTime()) && d >= cutoff;
+        })
+      : sorted;
+
+    // Only settled bets contribute to the P&L curve
+    const settled = filtered.filter(
+      (b) => b.status === 'won' || b.status === 'lost'
+    );
+    if (settled.length === 0) return { chartData: DEFAULT_DATA, isEmpty: true };
+
+    // Zero-baseline starting point just before the first bet
+    const firstTs = new Date(
+      settled[0].placed_at ?? settled[0].created_at
+    ).getTime();
+    let cumulative = 0;
+    const points: ChartPoint[] = [{ timestamp: firstTs - 1, value: 0 }];
+
+    for (const bet of settled) {
+      if (bet.status === 'won')
+        cumulative += (bet.potential_payout || 0) - (bet.wager || 0);
+      else if (bet.status === 'lost') cumulative -= bet.wager || 0;
+      const raw = bet.placed_at ?? bet.created_at;
+      const ts = raw ? new Date(raw).getTime() : Date.now();
+      points.push({ timestamp: ts, value: cumulative });
+    }
+
+    const data = points.length >= 2 ? points : DEFAULT_DATA;
+    return { chartData: data, isEmpty: false };
+  }, [allBets, period]);
+
+  const finalValue = chartData[chartData.length - 1].value;
+  const isNegative = finalValue < 0;
+  const lineColor = isNegative ? '#FF3B30' : '#00D632';
+
+  const outerWidth = Dimensions.get('window').width - 80;
+  const chartLineWidth = outerWidth - Y_AXIS_WIDTH;
+
+  const allValues = chartData.map((d) => d.value);
+  const minVal = Math.min(...allValues);
+  const maxVal = Math.max(...allValues);
+  const yRange =
+    minVal === maxVal ? { min: minVal - 1, max: maxVal + 1 } : undefined;
+
+  const effectiveMin = yRange?.min ?? minVal;
+  const effectiveMax = yRange?.max ?? maxVal;
+  const drawHeight = CHART_HEIGHT - 2 * Y_GUTTER;
+
+  // Y axis: 5 labels from top (max) to bottom (min), absolutely positioned
+  const yLabels = useMemo(() => {
+    return Array.from({ length: NUM_Y_LABELS }, (_, i) => {
+      const t = i / (NUM_Y_LABELS - 1);
+      const value = effectiveMax - t * (effectiveMax - effectiveMin);
+      const yPos = Y_GUTTER + t * drawHeight;
+      return { yPos, text: formatYLabel(value) };
+    });
+  }, [effectiveMin, effectiveMax, drawHeight]);
+
+  const xLabels = useMemo(
+    () => (isEmpty ? [] : buildXLabels(chartData, period, chartLineWidth)),
+    [chartData, period, chartLineWidth, isEmpty]
   );
 
-  const currentPL = chartData[chartData.length - 1]?.value ?? 0;
-  const lineColor = currentPL >= 0 ? '#00D632' : '#FF3B30';
+  const handleIndexChange = (index: number) => {
+    if (!onCursorChange) return;
+    if (index < 0 || index >= chartData.length) {
+      onCursorChange(null);
+    } else {
+      onCursorChange(chartData[index].value);
+    }
+  };
 
-  // When all values are identical (flat line), give the y-axis a small range so
-  // the line renders at the vertical centre rather than producing a degenerate scale.
-  const allSame = chartData.every((p) => p.value === chartData[0].value);
-  const yRange = allSame
-    ? { min: chartData[0].value - 1, max: chartData[0].value + 1 }
-    : undefined;
+  // wagmi-charts uses native modules not available on web
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.webFallback}>
+        <Text style={styles.webFallbackText}>Chart available on mobile</Text>
+      </View>
+    );
+  }
 
-  const handleIndexChange = useCallback(
-    (index: number) => {
-      if (index >= 0 && index < chartData.length) {
-        onCursorChange?.(chartData[index].value);
-      }
-    },
-    [chartData, onCursorChange]
-  );
-
-  const cutoff = getTimeCutoff(period);
-  const leftLabel = formatXLabel(cutoff, period);
-  const rightLabel = formatXLabel(new Date(), period);
+  // Daily with no settled bets today → show message instead of flat line
+  if (period === 'Daily' && isEmpty) {
+    return (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyStateText}>No bets placed today</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      {/*
-       * key={period} forces a clean remount whenever the time period changes.
-       * This re-triggers the 800 ms draw-on animation and flushes any stale
-       * internal wagmi-charts state (cursor position, path cache, etc.).
-       */}
-      <LineChart.Provider
-        key={period}
-        data={chartData}
-        yRange={yRange}
-        onCurrentIndexChange={handleIndexChange}
-      >
-        <LineChart
-          height={CHART_HEIGHT}
-          width={CHART_WIDTH}
-          shape={d3Shape.curveMonotoneX}
-          yGutter={12}
-        >
-          <LineChart.Path
-            color={lineColor}
-            width={2.5}
-            animateOnMount="foreground"
-            mountAnimationDuration={800}
-          >
-            <LineChart.Gradient>
-              <Stop offset="0%" stopColor={lineColor} stopOpacity={0.22} />
-              <Stop offset="60%" stopColor={lineColor} stopOpacity={0.05} />
-              <Stop offset="100%" stopColor={lineColor} stopOpacity={0} />
-            </LineChart.Gradient>
-          </LineChart.Path>
+    <View>
+      {/* Chart row: Y-axis labels + line chart */}
+      <View style={{ flexDirection: 'row', height: CHART_HEIGHT }}>
+        {/* Y axis labels — absolutely positioned within a fixed-width column */}
+        <View style={{ width: Y_AXIS_WIDTH, height: CHART_HEIGHT, position: 'relative' }}>
+          {yLabels.map((label, i) => (
+            <Text
+              key={i}
+              style={{
+                position: 'absolute',
+                top: label.yPos - 6,
+                right: 4,
+                color: '#999',
+                fontSize: 10,
+              }}
+            >
+              {label.text}
+            </Text>
+          ))}
+        </View>
 
-          <LineChart.Cursor
-            type="line"
-            onActivated={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-            onEnded={() => {
-              onCursorChange?.(null);
+        {/* Line chart */}
+        <View style={{ width: chartLineWidth }}>
+          <LineChart.Provider
+            data={chartData}
+            yRange={yRange}
+            onCurrentIndexChange={handleIndexChange}
+          >
+            <LineChart width={chartLineWidth} height={CHART_HEIGHT} yGutter={Y_GUTTER}>
+              <LineChart.Path color={lineColor}>
+                <LineChart.Gradient />
+              </LineChart.Path>
+              <LineChart.CursorCrosshair color={lineColor} />
+            </LineChart>
+          </LineChart.Provider>
+        </View>
+      </View>
+
+      {/* X axis labels — absolutely positioned to prevent duplicates */}
+      <View style={{ marginLeft: Y_AXIS_WIDTH, height: 18, position: 'relative' }}>
+        {xLabels.map((label, i) => (
+          <Text
+            key={i}
+            style={{
+              position: 'absolute',
+              // Clamp so first label doesn't clip left and last doesn't clip right
+              left: Math.max(0, Math.min(label.xPos - 12, chartLineWidth - 32)),
+              top: 4,
+              color: '#999',
+              fontSize: 10,
             }}
           >
-            <LineChart.CursorLine
-              color={lineColor}
-              lineProps={{ strokeDasharray: '4 3', strokeWidth: '1.5' }}
-              textStyle={styles.cursorDateLabel}
-            />
-          </LineChart.Cursor>
-        </LineChart>
-      </LineChart.Provider>
-
-      {/* Static start / end labels beneath the chart */}
-      <View style={styles.xAxisRow}>
-        <Text style={styles.xAxisLabel}>{leftLabel}</Text>
-        <Text style={styles.xAxisLabel}>{rightLabel}</Text>
+            {label.text}
+          </Text>
+        ))}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    width: CHART_WIDTH,
+  webFallback: {
+    height: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  xAxisRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: -32,
-    paddingHorizontal: 2,
+  webFallbackText: {
+    color: '#999',
+    fontSize: 14,
   },
-  xAxisLabel: {
-    fontSize: 11,
-    fontWeight: '400',
-    color: '#9CA3AF',
+  emptyState: {
+    height: CHART_HEIGHT + 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cursorDateLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#9CA3AF',
+  emptyStateText: {
+    color: '#999',
+    fontSize: 14,
   },
 });

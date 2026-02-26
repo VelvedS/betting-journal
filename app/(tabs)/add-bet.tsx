@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated as RNAnimated, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated as RNAnimated, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -25,6 +25,7 @@ export default function AddBetScreen() {
   const [screen, setScreen] = useState<ScreenState>('default');
   const [visibleSteps, setVisibleSteps] = useState<number>(0);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
+  const [uploadedStoragePath, setUploadedStoragePath] = useState<string>('');
   const [extractedData, setExtractedData] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -136,7 +137,7 @@ export default function AddBetScreen() {
   }, [uploadedImageUrl]);
 
   const callExtractBetDetailsFunction = async () => {
-    if (!uploadedImageUrl || !user) {
+    if (!uploadedStoragePath || !uploadedImageUrl || !user) {
       setErrorMessage('Failed to process image. Please try again.');
       setScreen('error');
       return;
@@ -171,7 +172,7 @@ export default function AddBetScreen() {
             'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
           },
           body: JSON.stringify({
-            image_url: uploadedImageUrl,
+            image_url: uploadedStoragePath,
             user_id: session.user.id
           })
         }
@@ -234,22 +235,30 @@ export default function AddBetScreen() {
     });
   };
 
-  const uploadImageToStorage = async (uri: string): Promise<string | null> => {
+  const uploadImageToStorage = async (uri: string): Promise<{ publicUrl: string; storagePath: string } | null> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return null;
 
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
       const fileName = `${session.user.id}/${Date.now()}.jpg`;
+      console.log('DEBUG upload uri:', uri);
+      console.log('DEBUG upload fileName:', fileName);
+
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        name: fileName,
+        type: 'image/jpeg',
+      } as any);
 
       const { data, error } = await supabase.storage
         .from('betting-slips')
-        .upload(fileName, blob, {
-          contentType: 'image/jpeg',
-          upsert: false,
+        .upload(fileName, formData, {
+          contentType: 'multipart/form-data',
+          upsert: true,
         });
+
+      console.log('DEBUG upload result data:', data, 'error:', error);
 
       if (error) {
         console.error('Storage upload error:', error);
@@ -260,7 +269,7 @@ export default function AddBetScreen() {
         .from('betting-slips')
         .getPublicUrl(data.path);
 
-      return urlData.publicUrl;
+      return { publicUrl: urlData.publicUrl, storagePath: data.path };
     } catch (err) {
       console.error('Upload error:', err);
       return null;
@@ -281,19 +290,25 @@ export default function AddBetScreen() {
     const uri = result.assets[0].uri;
     setScreen('processing');
 
-    const publicUrl = await uploadImageToStorage(uri);
-    if (!publicUrl) {
+    const uploadResult = await uploadImageToStorage(uri);
+    if (!uploadResult) {
       setErrorMessage('Failed to upload image. Please try again.');
       setScreen('error');
       return;
     }
 
-    setUploadedImageUrl(publicUrl);
+    setUploadedStoragePath(uploadResult.storagePath);
+    setUploadedImageUrl(uploadResult.publicUrl);
   };
 
   const handleTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
+      Alert.alert(
+        'Camera Access Required',
+        'Please enable camera access in Settings to take photos.',
+        [{ text: 'OK' }]
+      );
       return;
     }
 
@@ -310,19 +325,21 @@ export default function AddBetScreen() {
     const uri = result.assets[0].uri;
     setScreen('processing');
 
-    const publicUrl = await uploadImageToStorage(uri);
-    if (!publicUrl) {
+    const uploadResult = await uploadImageToStorage(uri);
+    if (!uploadResult) {
       setErrorMessage('Failed to upload image. Please try again.');
       setScreen('error');
       return;
     }
 
-    setUploadedImageUrl(publicUrl);
+    setUploadedStoragePath(uploadResult.storagePath);
+    setUploadedImageUrl(uploadResult.publicUrl);
   };
 
   const handleRetryUpload = () => {
     setErrorMessage('');
     setUploadedImageUrl('');
+    setUploadedStoragePath('');
     setExtractedData(null);
     setScreen('default');
   };

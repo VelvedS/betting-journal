@@ -42,7 +42,8 @@ export default function StatsScreen() {
       .from('bets')
       .select('*')
       .eq('user_id', user.id)
-      .order('placed_at', { ascending: false });
+      .order('placed_at', { ascending: false })
+      .order('created_at', { ascending: false });
     setAllBets(data || []);
   }, [user]);
 
@@ -146,7 +147,7 @@ export default function StatsScreen() {
 
         {/* Summary Cards - Row 1 */}
         <Animated.View style={[styles.summaryRow, { opacity: fadeAnim }]}>
-          <FadeInView delay={80} direction="bottom" style={styles.summaryCardFlex}>
+          <FadeInView delay={0} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
                 <Ionicons name="trending-up" size={20} color="#10B981" />
@@ -163,7 +164,7 @@ export default function StatsScreen() {
             </View>
           </FadeInView>
 
-          <FadeInView delay={140} direction="bottom" style={styles.summaryCardFlex}>
+          <FadeInView delay={30} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
                 <Ionicons name="trending-down" size={20} color="#EF4444" />
@@ -180,7 +181,7 @@ export default function StatsScreen() {
             </View>
           </FadeInView>
 
-          <FadeInView delay={200} direction="bottom" style={styles.summaryCardFlex}>
+          <FadeInView delay={60} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
                 <Ionicons name="document-text-outline" size={20} color={getValueColor(netPL)} />
@@ -200,7 +201,7 @@ export default function StatsScreen() {
 
         {/* Summary Cards - Row 2 */}
         <Animated.View style={[styles.summaryRow, { opacity: fadeAnim }]}>
-          <FadeInView delay={260} direction="bottom" style={styles.summaryCardFlex}>
+          <FadeInView delay={60} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
                 <Ionicons name="cash-outline" size={20} color="#10B981" />
@@ -217,7 +218,7 @@ export default function StatsScreen() {
             </View>
           </FadeInView>
 
-          <FadeInView delay={320} direction="bottom" style={styles.summaryCardFlex}>
+          <FadeInView delay={80} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
                 <Ionicons name="checkmark-circle-outline" size={20} color="#10B981" />
@@ -234,7 +235,7 @@ export default function StatsScreen() {
             </View>
           </FadeInView>
 
-          <FadeInView delay={380} direction="bottom" style={styles.summaryCardFlex}>
+          <FadeInView delay={100} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
                 <Ionicons name="bar-chart-outline" size={20} color={getValueColor(roiValue)} />
@@ -294,7 +295,7 @@ export default function StatsScreen() {
             filteredBets.map((bet, index) => {
               const sc = getStatusConfig(bet.status);
               const roiPctValue = bet.wager > 0 ? ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100 : 0;
-              const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+              const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
               return (
               <FadeInView key={bet.id} delay={500 + index * 60} direction="bottom">
                 <AnimatedPressable
