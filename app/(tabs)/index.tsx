@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
@@ -72,6 +73,8 @@ function calcPeriodStats(allBets: any[], period: TimePeriod) {
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Weekly');
   const [recentBets, setRecentBets] = useState<any[]>([]);
   const [allBets, setAllBets] = useState<any[]>([]);
@@ -122,7 +125,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={colors.statusBar} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -372,10 +375,11 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext').useTheme>['colors']) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -388,16 +392,16 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
     marginBottom: 4,
   },
   headerQuote: {
     fontSize: 15,
     fontStyle: 'italic',
-    color: '#6B6B6B',
+    color: colors.textSecondary,
   },
   profitCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
@@ -407,7 +411,7 @@ const styles = StyleSheet.create({
   profitLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     letterSpacing: 0.5,
     marginBottom: 8,
   },
@@ -424,7 +428,7 @@ const styles = StyleSheet.create({
   profitValueEmpty: {
     fontSize: 36,
     fontWeight: '700',
-    color: '#9CA3AF',
+    color: colors.textTertiary,
   },
   percentageContainer: {
     flexDirection: 'row',
@@ -442,24 +446,24 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tab: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.chipBg,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 20,
   },
   tabActive: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: colors.chipActiveBg,
   },
   tabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B6B6B',
+    color: colors.textSecondary,
   },
   tabTextActive: {
-    color: '#FFFFFF',
+    color: colors.chipActiveText,
   },
   chartCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
@@ -470,7 +474,7 @@ const styles = StyleSheet.create({
   chartLabel: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     letterSpacing: 0.5,
     marginBottom: 16,
   },
@@ -486,7 +490,7 @@ const styles = StyleSheet.create({
   activityTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
   },
   viewAllButton: {
     flexDirection: 'row',
@@ -499,7 +503,7 @@ const styles = StyleSheet.create({
     color: '#6366F1',
   },
   activityCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -520,7 +524,7 @@ const styles = StyleSheet.create({
   platformName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
   },
   badge: {
     paddingHorizontal: 10,
@@ -534,7 +538,7 @@ const styles = StyleSheet.create({
   },
   betType: {
     fontSize: 14,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     marginBottom: 12,
   },
   statsRow: {
@@ -548,14 +552,14 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: colors.textTertiary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   statValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
   },
   roiValue: {
     fontSize: 16,
@@ -569,19 +573,19 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textTertiary,
   },
   betId: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textTertiary,
   },
   emptyStateCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 40,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   emptyIconCircle: {
     width: 72,
@@ -595,12 +599,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 15,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
@@ -616,4 +620,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-});
+  });
+}

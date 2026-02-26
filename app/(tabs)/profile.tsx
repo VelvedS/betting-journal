@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, AppState } from 'react-native';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, AppState, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { formatCompactCurrency, formatPercent, formatWholeNumber } from '@/lib/formatters';
 import AnimatedPressable from '@/components/AnimatedPressable';
@@ -13,6 +14,7 @@ import AnimatedNumber from '@/components/AnimatedNumber';
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut, user } = useAuth();
+  const { colors, isDark, toggleTheme } = useTheme();
   const [totalBets, setTotalBets] = useState<number | null>(null);
   const [winRate, setWinRate] = useState<number | null>(null);
   const [profit, setProfit] = useState<number | null>(null);
@@ -48,18 +50,15 @@ export default function ProfileScreen() {
         return;
       }
 
-      // Calculate total bets
       const total = bets.length;
       setTotalBets(total);
 
-      // Calculate win rate (exclude pending and void from denominator)
       const wonBets = bets.filter(b => b.status === 'won');
       const lostBets = bets.filter(b => b.status === 'lost');
       const settledBets = wonBets.length + lostBets.length;
       const rate = settledBets > 0 ? (wonBets.length / settledBets) * 100 : 0;
       setWinRate(rate);
 
-      // Calculate profit
       const wonProfit = wonBets.reduce((sum, b) => sum + ((b.potential_payout || 0) - (b.wager || 0)), 0);
       const lostProfit = lostBets.reduce((sum, b) => sum + (b.wager || 0), 0);
       const netProfit = wonProfit - lostProfit;
@@ -75,7 +74,6 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
-  // Fetch stats on component mount and when app returns to focus
   useEffect(() => {
     fetchStats();
 
@@ -94,7 +92,6 @@ export default function ProfileScreen() {
     await signOut();
   };
 
-
   const profitColor = profit === null || profit >= 0 ? '#10B981' : '#E85D5D';
 
   const menuItems = [
@@ -104,9 +101,11 @@ export default function ProfileScreen() {
     { icon: 'help-circle-outline', title: 'Help & Support', description: 'FAQs and contact', route: '/help-support' },
   ] as const;
 
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={colors.statusBar} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header Section */}
         <FadeInView delay={0} direction="bottom">
@@ -119,10 +118,9 @@ export default function ProfileScreen() {
         {/* Card 1 - User Profile Card */}
         <FadeInView delay={80} direction="bottom">
           <View style={styles.profileCard}>
-            {/* User Info Section */}
             <View style={styles.userInfoSection}>
               <View style={styles.avatarCircle}>
-                <Ionicons name="person-outline" size={32} color="#6B6B6B" />
+                <Ionicons name="person-outline" size={32} color={colors.iconSecondary} />
               </View>
               <View style={styles.userTextContainer}>
                 <Text style={styles.userName}>{user?.user_metadata?.full_name || 'John Trader'}</Text>
@@ -130,10 +128,8 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* Divider */}
             <View style={styles.divider} />
 
-            {/* Stats Section */}
             <View style={styles.statsSection}>
               <View style={styles.statColumn}>
                 {loading ? (
@@ -168,7 +164,7 @@ export default function ProfileScreen() {
                   <AnimatedNumber
                     value={Math.abs(profit || 0)}
                     prefix={profit !== null && profit < 0 ? '-$' : '$'}
-                    decimals={2}
+                    decimals={0}
                     delay={280}
                     style={[styles.statValue, { color: profitColor }]}
                   />
@@ -183,15 +179,18 @@ export default function ProfileScreen() {
         <FadeInView delay={200} direction="bottom">
           <View style={styles.settingCard}>
             <View style={styles.settingIconCircle}>
-              <Ionicons name="sunny-outline" size={22} color="#6B6B6B" />
+              <Ionicons name={isDark ? 'moon-outline' : 'sunny-outline'} size={22} color={colors.iconSecondary} />
             </View>
             <View style={styles.settingTextContainer}>
               <Text style={styles.settingTitle}>Appearance</Text>
-              <Text style={styles.settingDescription}>The Ledger (Light)</Text>
+              <Text style={styles.settingDescription}>{isDark ? 'Dark Mode' : 'Light Mode'}</Text>
             </View>
-            <View style={styles.toggleSwitch}>
-              <View style={styles.toggleThumb} />
-            </View>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: '#D1D5DB', true: '#1A1A2E' }}
+              thumbColor="#FFFFFF"
+            />
           </View>
         </FadeInView>
 
@@ -206,13 +205,13 @@ export default function ProfileScreen() {
                 scaleDown={0.98}
               >
                 <View style={styles.menuIconCircle}>
-                  <Ionicons name={item.icon as any} size={22} color="#6B6B6B" />
+                  <Ionicons name={item.icon as any} size={22} color={colors.iconSecondary} />
                 </View>
                 <View style={styles.menuTextContainer}>
                   <Text style={styles.menuTitle}>{item.title}</Text>
                   <Text style={styles.menuDescription}>{item.description}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#9B9B9B" />
+                <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
               </AnimatedPressable>
             ))}
           </View>
@@ -235,217 +234,199 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 100,
-  },
+function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext').useTheme>['colors']) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 100,
+    },
 
-  // Header Section
-  header: {
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: '#6B6B6B',
-    lineHeight: 20,
-  },
+    header: {
+      marginBottom: 24,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 6,
+    },
+    subtitle: {
+      fontSize: 15,
+      fontWeight: '400',
+      color: colors.textSecondary,
+      lineHeight: 20,
+    },
 
-  // Profile Card
-  profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    padding: 20,
-    marginBottom: 18,
-  },
-  userInfoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  avatarCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  userTextContainer: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#6B6B6B',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E8E8E8',
-    marginBottom: 16,
-  },
-  statsSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statColumn: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#9B9B9B',
-    letterSpacing: 0.5,
-  },
+    profileCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 20,
+      marginBottom: 18,
+    },
+    userInfoSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    avatarCircle: {
+      width: 68,
+      height: 68,
+      borderRadius: 34,
+      backgroundColor: colors.iconCircleBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 16,
+    },
+    userTextContainer: {
+      flex: 1,
+    },
+    userName: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    userEmail: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: colors.textSecondary,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginBottom: 16,
+    },
+    statsSection: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+    },
+    statColumn: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    statValue: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    statLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      letterSpacing: 0.5,
+    },
 
-  // Setting Card (Appearance)
-  settingCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  settingIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  settingTextContainer: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 3,
-  },
-  settingDescription: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#6B6B6B',
-  },
-  toggleSwitch: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#E0E0E0',
-    padding: 2,
-    justifyContent: 'center',
-  },
-  toggleThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-  },
+    settingCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 18,
+    },
+    settingIconCircle: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      backgroundColor: colors.iconCircleBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 14,
+    },
+    settingTextContainer: {
+      flex: 1,
+    },
+    settingTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 3,
+    },
+    settingDescription: {
+      fontSize: 13,
+      fontWeight: '400',
+      color: colors.textSecondary,
+    },
 
-  // Menu Card
-  menuCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    marginBottom: 20,
-  },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  menuIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  menuTextContainer: {
-    flex: 1,
-  },
-  menuTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 3,
-  },
-  menuDescription: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#6B6B6B',
-  },
+    menuCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 8,
+      paddingHorizontal: 18,
+      marginBottom: 20,
+    },
+    menuRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 14,
+    },
+    menuIconCircle: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      backgroundColor: colors.iconCircleBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 14,
+    },
+    menuTextContainer: {
+      flex: 1,
+    },
+    menuTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 3,
+    },
+    menuDescription: {
+      fontSize: 13,
+      fontWeight: '400',
+      color: colors.textSecondary,
+    },
 
-  // Sign Out Button
-  signOutButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-  },
-  signOutIcon: {
-    marginRight: 8,
-  },
-  signOutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#E85D5D',
-  },
+    signOutButton: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 18,
+    },
+    signOutIcon: {
+      marginRight: 8,
+    },
+    signOutText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#E85D5D',
+    },
 
-  // Version Footer
-  versionText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#9B9B9B',
-    textAlign: 'center',
-    letterSpacing: 0.8,
-    marginTop: 2,
-  },
-});
+    versionText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      textAlign: 'center',
+      letterSpacing: 0.8,
+      marginTop: 2,
+    },
+  });
+}

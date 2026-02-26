@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { formatCurrency, formatPL, formatPercent, formatWholeNumber } from '@/lib/formatters';
@@ -33,6 +34,8 @@ const getStatusConfig = (status: string) => {
 export default function StatsScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All');
   const [allBets, setAllBets] = useState<any[]>([]);
 
@@ -105,7 +108,7 @@ export default function StatsScreen() {
   const getValueColor = (value: number) => {
     if (value > 0) return '#10B981';
     if (value < 0) return '#EF4444';
-    return '#1A1A1A';
+    return colors.text;
   };
 
   // Helper function to get responsive font size based on string length
@@ -127,7 +130,7 @@ export default function StatsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={colors.statusBar} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -140,7 +143,7 @@ export default function StatsScreen() {
               <Text style={styles.subtitle}>{subtitleText}</Text>
             </View>
             <AnimatedPressable style={styles.filterIconButton} scaleDown={0.9}>
-              <Ionicons name="funnel-outline" size={22} color="#1A1A1A" />
+              <Ionicons name="funnel-outline" size={22} color={colors.text} />
             </AnimatedPressable>
           </View>
         </FadeInView>
@@ -356,10 +359,11 @@ export default function StatsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext').useTheme>['colors']) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -375,19 +379,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     fontWeight: '400',
   },
   filterIconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.05)',
@@ -403,7 +407,7 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.03)',
@@ -416,14 +420,14 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: colors.textTertiary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   summaryValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
   },
   filterTabsContainer: {
     flexDirection: 'row',
@@ -432,27 +436,27 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   filterTab: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.chipBg,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 20,
   },
   filterTabActive: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: colors.chipActiveBg,
   },
   filterTabText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4B5563',
+    color: colors.textSecondary,
   },
   filterTabTextActive: {
-    color: '#FFFFFF',
+    color: colors.chipActiveText,
   },
   betsList: {
     gap: 12,
   },
   betCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
@@ -472,7 +476,7 @@ const styles = StyleSheet.create({
   platformName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -486,7 +490,7 @@ const styles = StyleSheet.create({
   },
   betType: {
     fontSize: 14,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     marginBottom: 12,
   },
   statsRow: {
@@ -500,14 +504,14 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: colors.textTertiary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   statValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
   },
   roiValue: {
     fontSize: 16,
@@ -521,19 +525,19 @@ const styles = StyleSheet.create({
   },
   betDate: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textTertiary,
   },
   betId: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textTertiary,
   },
   emptyStateCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 40,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   emptyIconCircle: {
     width: 72,
@@ -547,13 +551,14 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 15,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
-});
+  });
+}

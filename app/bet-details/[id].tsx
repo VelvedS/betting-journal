@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import RAnimated, {
 } from 'react-native-reanimated';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
+import { useTheme } from '@/context/ThemeContext';
 
 type BetStatus = 'pending' | 'won' | 'lost' | 'void';
 
@@ -127,6 +128,9 @@ export default function BetDetailsScreen() {
   const [showStatusUpdate, setShowStatusUpdate] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const betId = typeof id === 'string' ? id : '';
 
   // Pulse animation for pending status
@@ -185,7 +189,7 @@ export default function BetDetailsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
+        <StatusBar style={colors.statusBar} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6366F1" />
         </View>
@@ -196,9 +200,9 @@ export default function BetDetailsScreen() {
   if (!bet) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
+        <StatusBar style={colors.statusBar} />
         <View style={styles.loadingContainer}>
-          <Text style={{ fontSize: 16, color: '#6B6B6B' }}>Bet not found</Text>
+          <Text style={{ fontSize: 16, color: colors.textSecondary }}>Bet not found</Text>
           <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
             <Text style={{ fontSize: 16, color: '#6366F1', fontWeight: '600' }}>Go Back</Text>
           </TouchableOpacity>
@@ -217,7 +221,7 @@ export default function BetDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={colors.statusBar} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -230,7 +234,7 @@ export default function BetDetailsScreen() {
               onPress={() => router.back()}
               scaleDown={0.9}
             >
-              <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
             </AnimatedPressable>
             <Text style={styles.headerTitle}>Bet Details</Text>
           </View>
@@ -330,7 +334,7 @@ export default function BetDetailsScreen() {
                 <Text style={styles.notesTitle}>Pick</Text>
               </View>
               <Text style={styles.notesText}>{bet.description || '—'}</Text>
-              {bet.matchup ? <Text style={[styles.notesText, { marginTop: 4, color: '#9CA3AF' }]}>{bet.matchup}</Text> : null}
+              {bet.matchup ? <Text style={[styles.notesText, { marginTop: 4, color: colors.textTertiary }]}>{bet.matchup}</Text> : null}
             </View>
           </FadeInView>
         )}
@@ -384,262 +388,264 @@ export default function BetDetailsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 12,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  statusBanner: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 8,
-  },
-  statusHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  statusLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#6B6B6B',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  statusValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  statusDate: {
-    fontSize: 14,
-    color: '#6B6B6B',
-  },
-  statusIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  updateStatusButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    marginBottom: 8,
-  },
-  updateStatusText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6366F1',
-  },
-  updateStatusContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
-    elevation: 2,
-    alignItems: 'center',
-  },
-  updatePillsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  updatePill: {
-    borderRadius: 9,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    height: 38,
-    justifyContent: 'center',
-  },
-  updatePillText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  infoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
-    elevation: 2,
-  },
-  sportsbookHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  sportsbookIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E8F8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sportsbookInfo: {
-    flex: 1,
-  },
-  sportsbookName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 2,
-  },
-  sportsbookType: {
-    fontSize: 14,
-    color: '#6B6B6B',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 16,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statColumn: {
-    flex: 1,
-  },
-  statColumnRight: {
-    alignItems: 'flex-end',
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#9CA3AF',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  roiValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#10B981',
-  },
-  notesCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
-    elevation: 2,
-  },
-  notesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  notesTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  notesText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: '#6B6B6B',
-  },
-  parlayLegsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    padding: 20,
-    marginBottom: 16,
-    boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
-    elevation: 2,
-  },
-  parlayLegsHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 16,
-  },
-  parlayLegsTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  parlayLegsCount: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#9CA3AF',
-  },
-  legCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    marginBottom: 10,
-  },
-  legCardInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  legInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  legDescription: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 4,
-  },
-  legOdds: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#9CA3AF',
-  },
-  legStatusPill: {
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  legStatusText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-});
+function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext').useTheme>['colors']) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 40,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 24,
+      gap: 12,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    headerTitle: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    statusBanner: {
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 8,
+    },
+    statusHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
+    statusLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+    statusValue: {
+      fontSize: 32,
+      fontWeight: '700',
+      marginBottom: 8,
+    },
+    statusDate: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    statusIconCircle: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    updateStatusButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 8,
+      marginBottom: 8,
+    },
+    updateStatusText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#6366F1',
+    },
+    updateStatusContainer: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
+      elevation: 2,
+      alignItems: 'center',
+    },
+    updatePillsRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    updatePill: {
+      borderRadius: 9,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      height: 38,
+      justifyContent: 'center',
+    },
+    updatePillText: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    infoCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 20,
+      marginBottom: 16,
+      boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
+      elevation: 2,
+    },
+    sportsbookHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    sportsbookIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: '#E8F8F0',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sportsbookInfo: {
+      flex: 1,
+    },
+    sportsbookName: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    sportsbookType: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: 16,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    statColumn: {
+      flex: 1,
+    },
+    statColumnRight: {
+      alignItems: 'flex-end',
+    },
+    statLabel: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+    statValue: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    roiValue: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: '#10B981',
+    },
+    notesCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 20,
+      marginBottom: 16,
+      boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
+      elevation: 2,
+    },
+    notesHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 12,
+    },
+    notesTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    notesText: {
+      fontSize: 14,
+      lineHeight: 22,
+      color: colors.textSecondary,
+    },
+    parlayLegsCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 20,
+      marginBottom: 16,
+      boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
+      elevation: 2,
+    },
+    parlayLegsHeader: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      marginBottom: 16,
+    },
+    parlayLegsTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    parlayLegsCount: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: colors.textTertiary,
+    },
+    legCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 10,
+    },
+    legCardInner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: 16,
+    },
+    legInfo: {
+      flex: 1,
+      marginRight: 12,
+    },
+    legDescription: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    legOdds: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: colors.textTertiary,
+    },
+    legStatusPill: {
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+    },
+    legStatusText: {
+      fontSize: 13,
+      fontWeight: '600',
+    },
+  });
+}

@@ -3,28 +3,37 @@ import { View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AnimatedPressable from '@/components/AnimatedPressable';
-
-const ACTIVE_COLOR = '#1A1A2E';
-const INACTIVE_COLOR = '#B0B0B0';
+import { useTheme } from '@/context/ThemeContext';
 
 function AddBetButton({ onPress }: { onPress: () => void }) {
+  const { colors } = useTheme();
   return (
     <AnimatedPressable style={styles.addBetButton} onPress={onPress} scaleDown={0.92}>
-      <View style={styles.addBetCircle}>
-        <Ionicons name="add" size={28} color="#FFFFFF" />
+      <View style={[styles.addBetCircle, { backgroundColor: colors.buttonPrimary }]}>
+        <Ionicons name="add" size={28} color={colors.buttonPrimaryText} />
       </View>
     </AnimatedPressable>
   );
 }
 
 export default function TabLayout() {
+  const { colors } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: ACTIVE_COLOR,
-        tabBarInactiveTintColor: INACTIVE_COLOR,
-        tabBarStyle: styles.tabBar,
+        tabBarActiveTintColor: colors.tabActive,
+        tabBarInactiveTintColor: colors.tabInactive,
+        tabBarStyle: {
+          backgroundColor: colors.tabBar,
+          borderTopWidth: 0,
+          height: 85,
+          paddingBottom: 20,
+          paddingTop: 8,
+          boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.06)',
+          elevation: 8,
+        },
         tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
@@ -79,15 +88,6 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 0,
-    height: 85,
-    paddingBottom: 20,
-    paddingTop: 8,
-    boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 8,
-  },
   tabBarLabel: {
     fontSize: 11,
     fontWeight: '600',
@@ -102,7 +102,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#1A1A2E',
     justifyContent: 'center',
     alignItems: 'center',
     boxShadow: '0px 4px 8px rgba(26, 26, 46, 0.3)',

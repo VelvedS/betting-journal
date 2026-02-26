@@ -1,10 +1,11 @@
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated as RNAnimated, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -22,6 +23,8 @@ type ScreenState = 'default' | 'processing' | 'success' | 'error';
 export default function AddBetScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [screen, setScreen] = useState<ScreenState>('default');
   const [visibleSteps, setVisibleSteps] = useState<number>(0);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
@@ -360,7 +363,7 @@ export default function AddBetScreen() {
   if (screen === 'processing') {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
+        <StatusBar style={colors.statusBar} />
         <View style={styles.fullScreenContainer}>
           {/* Header */}
           <View style={styles.header}>
@@ -415,7 +418,7 @@ export default function AddBetScreen() {
   if (screen === 'success') {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
+        <StatusBar style={colors.statusBar} />
         <AnimatedPressable
           style={styles.fullScreenContainer}
           onPress={handleSuccessTap}
@@ -456,7 +459,7 @@ export default function AddBetScreen() {
   if (screen === 'error') {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
+        <StatusBar style={colors.statusBar} />
         <View style={styles.fullScreenContainer}>
           {/* Header */}
           <View style={styles.header}>
@@ -517,7 +520,7 @@ export default function AddBetScreen() {
         <FadeInView delay={80} direction="bottom">
           <AnimatedPressable style={styles.uploadCard} onPress={handlePickImage} scaleDown={0.97}>
             <View style={styles.uploadIconCircle}>
-              <Ionicons name="cloud-upload-outline" size={32} color="#6B6B6B" />
+              <Ionicons name="cloud-upload-outline" size={32} color={colors.iconSecondary} />
             </View>
             <Text style={styles.uploadCardTitle}>Upload Betting Slip</Text>
             <Text style={styles.uploadCardDescription}>
@@ -530,7 +533,7 @@ export default function AddBetScreen() {
         <FadeInView delay={140} direction="bottom">
           <AnimatedPressable style={styles.compactCard} onPress={handleTakePhoto} scaleDown={0.97}>
             <View style={styles.compactIconCircle}>
-              <Ionicons name="camera-outline" size={24} color="#6B6B6B" />
+              <Ionicons name="camera-outline" size={24} color={colors.iconSecondary} />
             </View>
             <View style={styles.compactTextContainer}>
               <Text style={styles.compactCardTitle}>Take a Photo</Text>
@@ -553,7 +556,7 @@ export default function AddBetScreen() {
         <FadeInView delay={220} direction="bottom">
           <AnimatedPressable style={styles.compactCard} onPress={() => router.push('/manual-add-bet')} scaleDown={0.97}>
             <View style={styles.compactIconCircle}>
-              <Ionicons name="add-outline" size={28} color="#6B6B6B" />
+              <Ionicons name="add-outline" size={28} color={colors.iconSecondary} />
             </View>
             <View style={styles.compactTextContainer}>
               <Text style={styles.compactCardTitle}>Manually Add Your Bet</Text>
@@ -579,355 +582,357 @@ export default function AddBetScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 100,
-  },
-  fullScreenContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
+function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext').useTheme>['colors']) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 100,
+    },
+    fullScreenContainer: {
+      flex: 1,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+    },
 
-  // Header Section
-  header: {
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: '#6B6B6B',
-    lineHeight: 20,
-  },
+    // Header Section
+    header: {
+      marginBottom: 32,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 6,
+    },
+    subtitle: {
+      fontSize: 15,
+      fontWeight: '400',
+      color: colors.textSecondary,
+      lineHeight: 20,
+    },
 
-  // Centered Card Container
-  centeredCardContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 100,
-  },
+    // Centered Card Container
+    centeredCardContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 100,
+    },
 
-  // Processing Card
-  processingCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 400,
-  },
-  spinningCircle: {
-    width: 108,
-    height: 108,
-    borderRadius: 54,
-    borderWidth: 3,
-    borderColor: '#6C63FF',
-    borderStyle: 'solid',
-    borderTopColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  spinningCircleInner: {
-    width: '100%',
-    height: '100%',
-  },
-  aiIconContainer: {
-    position: 'absolute',
-    top: 40,
-    alignSelf: 'center',
-    width: 108,
-    height: 108,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  processingTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginTop: 24,
-    textAlign: 'center',
-  },
-  processingDescription: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#6B6B6B',
-    marginTop: 10,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  stepsContainer: {
-    marginTop: 28,
-    alignSelf: 'stretch',
-    paddingLeft: 20,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  stepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#6C63FF',
-    marginRight: 12,
-  },
-  stepText: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#6B6B6B',
-  },
+    // Processing Card
+    processingCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 40,
+      paddingHorizontal: 24,
+      alignItems: 'center',
+      width: '100%',
+      maxWidth: 400,
+    },
+    spinningCircle: {
+      width: 108,
+      height: 108,
+      borderRadius: 54,
+      borderWidth: 3,
+      borderColor: '#6C63FF',
+      borderStyle: 'solid',
+      borderTopColor: 'transparent',
+      borderRightColor: 'transparent',
+    },
+    spinningCircleInner: {
+      width: '100%',
+      height: '100%',
+    },
+    aiIconContainer: {
+      position: 'absolute',
+      top: 40,
+      alignSelf: 'center',
+      width: 108,
+      height: 108,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    processingTitle: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: colors.text,
+      marginTop: 24,
+      textAlign: 'center',
+    },
+    processingDescription: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: colors.textSecondary,
+      marginTop: 10,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    stepsContainer: {
+      marginTop: 28,
+      alignSelf: 'stretch',
+      paddingLeft: 20,
+    },
+    stepRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    stepDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: '#6C63FF',
+      marginRight: 12,
+    },
+    stepText: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: colors.textSecondary,
+    },
 
-  // Success Card
-  successCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 400,
-  },
-  successIconContainer: {
-    marginBottom: 20,
-  },
-  checkmarkCircle: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: '#E8F8F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  successTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  successDescription: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#6B6B6B',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+    // Success Card
+    successCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 40,
+      paddingHorizontal: 24,
+      alignItems: 'center',
+      width: '100%',
+      maxWidth: 400,
+    },
+    successIconContainer: {
+      marginBottom: 20,
+    },
+    checkmarkCircle: {
+      width: 86,
+      height: 86,
+      borderRadius: 43,
+      backgroundColor: '#E8F8F0',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    successTitle: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: colors.text,
+      textAlign: 'center',
+      marginBottom: 10,
+    },
+    successDescription: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
 
-  // Upload Card (Primary Action - Large Card)
-  uploadCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingVertical: 36,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-    minHeight: 190,
-  },
-  uploadIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-  },
-  uploadCardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  uploadCardDescription: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#6B6B6B',
-    textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 12,
-  },
+    // Upload Card (Primary Action - Large Card)
+    uploadCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 36,
+      paddingHorizontal: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 18,
+      minHeight: 190,
+    },
+    uploadIconCircle: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: colors.iconCircleBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 18,
+    },
+    uploadCardTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    uploadCardDescription: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 20,
+      paddingHorizontal: 12,
+    },
 
-  // Compact Card (Take a Photo & Manual Add)
-  compactCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-    minHeight: 76,
-  },
-  compactIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  compactTextContainer: {
-    flex: 1,
-  },
-  compactCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 4,
-  },
-  compactCardDescription: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#6B6B6B',
-    lineHeight: 18,
-  },
+    // Compact Card (Take a Photo & Manual Add)
+    compactCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 18,
+      minHeight: 76,
+    },
+    compactIconCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.iconCircleBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 16,
+    },
+    compactTextContainer: {
+      flex: 1,
+    },
+    compactCardTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    compactCardDescription: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
 
-  // Divider Section
-  dividerContainer: {
-    marginVertical: 48,
-    position: 'relative',
-    alignItems: 'center',
-  },
-  dividerLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '50%',
-    height: 1,
-    backgroundColor: '#E0E0E0',
-  },
-  dividerTextContainer: {
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 16,
-    zIndex: 1,
-  },
-  dividerText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#9B9B9B',
-    letterSpacing: 0.5,
-  },
+    // Divider Section
+    dividerContainer: {
+      marginVertical: 48,
+      position: 'relative',
+      alignItems: 'center',
+    },
+    dividerLine: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: '50%',
+      height: 1,
+      backgroundColor: colors.dividerLine,
+    },
+    dividerTextContainer: {
+      backgroundColor: colors.background,
+      paddingHorizontal: 16,
+      zIndex: 1,
+    },
+    dividerText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      letterSpacing: 0.5,
+    },
 
-  // Info Card (AI-Powered Recognition)
-  infoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 18,
-  },
-  infoIcon: {
-    marginRight: 10,
-    marginTop: 2,
-  },
-  infoTextContainer: {
-    flex: 1,
-  },
-  infoCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 6,
-  },
-  infoCardDescription: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#6B6B6B',
-    lineHeight: 19,
-  },
+    // Info Card (AI-Powered Recognition)
+    infoCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: 18,
+    },
+    infoIcon: {
+      marginRight: 10,
+      marginTop: 2,
+    },
+    infoTextContainer: {
+      flex: 1,
+    },
+    infoCardTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 6,
+    },
+    infoCardDescription: {
+      fontSize: 13,
+      fontWeight: '400',
+      color: colors.textSecondary,
+      lineHeight: 19,
+    },
 
-  // Error Card
-  errorCard: {
-    backgroundColor: '#FFF0F0',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FFE0E0',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 400,
-  },
-  errorIconContainer: {
-    marginBottom: 20,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  errorDescription: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#6B6B6B',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 28,
-  },
-  errorButtonsContainer: {
-    width: '100%',
-    gap: 12,
-  },
-  errorRetryButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorRetryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  errorManualButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorManualButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4B5563',
-  },
-});
+    // Error Card
+    errorCard: {
+      backgroundColor: '#FFF0F0',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: '#FFE0E0',
+      paddingVertical: 40,
+      paddingHorizontal: 24,
+      alignItems: 'center',
+      width: '100%',
+      maxWidth: 400,
+    },
+    errorIconContainer: {
+      marginBottom: 20,
+    },
+    errorTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.text,
+      textAlign: 'center',
+      marginBottom: 12,
+    },
+    errorDescription: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 20,
+      marginBottom: 28,
+    },
+    errorButtonsContainer: {
+      width: '100%',
+      gap: 12,
+    },
+    errorRetryButton: {
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+      borderRadius: 10,
+      backgroundColor: '#10B981',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    errorRetryButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#FFFFFF',
+    },
+    errorManualButton: {
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+      borderRadius: 10,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    errorManualButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+  });
+}

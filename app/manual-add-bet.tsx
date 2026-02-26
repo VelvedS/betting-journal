@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ import RAnimated, {
 } from 'react-native-reanimated';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
+import { useTheme } from '@/context/ThemeContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -210,6 +211,9 @@ export default function ManualAddBetScreen() {
   const hasRouteParams = Object.keys(params).length > 0;
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   // Form state
   const [betType, setBetType] = useState<BetType>(() => {
@@ -516,11 +520,11 @@ export default function ManualAddBetScreen() {
 
   // Platform sheet renderer
   const renderPlatformItem = ({ item }: { item: PlatformListItem }) => {
-    if (item.type === 'category') return <View style={bsStyles.categoryHeader}><Text style={bsStyles.categoryText}>{item.category}</Text></View>;
+    if (item.type === 'category') return <View style={styles.categoryHeader}><Text style={styles.categoryText}>{item.category}</Text></View>;
     const sel = (!isPlatformOther && selectedPlatform === item.name) || (isPlatformOther && item.name === 'Other');
     return (
-      <TouchableOpacity style={bsStyles.listRow} onPress={() => handleSelectPlatform(item.name)} activeOpacity={0.6}>
-        <Text style={bsStyles.listRowText}>{item.name}</Text>
+      <TouchableOpacity style={styles.listRow} onPress={() => handleSelectPlatform(item.name)} activeOpacity={0.6}>
+        <Text style={styles.listRowText}>{item.name}</Text>
         {sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}
       </TouchableOpacity>
     );
@@ -532,36 +536,36 @@ export default function ManualAddBetScreen() {
   const renderSportSheetContent = () => {
     if (filteredSports) {
       return (
-        <ScrollView contentContainerStyle={bsStyles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          {filteredSports.length === 0 ? <View style={bsStyles.emptyContainer}><Text style={bsStyles.emptyText}>No sports found</Text></View> :
+        <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {filteredSports.length === 0 ? <View style={styles.emptyContainer}><Text style={styles.emptyText}>No sports found</Text></View> :
             filteredSports.map((sport, i) => {
               const sel = (!isSportOther && selectedSport === sport) || (isSportOther && sport === 'Other');
-              return <TouchableOpacity key={`${sport}-${i}`} style={bsStyles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={bsStyles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
+              return <TouchableOpacity key={`${sport}-${i}`} style={styles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={styles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
             })}
         </ScrollView>
       );
     }
     return (
-      <ScrollView contentContainerStyle={bsStyles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={bsStyles.categoryHeader}><Text style={bsStyles.categoryText}>Popular</Text></View>
-        <View style={sportStyles.chipsGrid}>
+      <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={styles.categoryHeader}><Text style={styles.categoryText}>Popular</Text></View>
+        <View style={styles.chipsGrid}>
           {POPULAR_SPORTS.map((sport) => {
             const sel = !isSportOther && selectedSport === sport;
-            return <TouchableOpacity key={sport} style={[sportStyles.chip, sel && sportStyles.chipSelected]} onPress={() => handleSelectSport(sport)} activeOpacity={0.7}><Text style={[sportStyles.chipText, sel && sportStyles.chipTextSelected]}>{sport}</Text>{sel && <Ionicons name="checkmark" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />}</TouchableOpacity>;
+            return <TouchableOpacity key={sport} style={[styles.chip, sel && styles.chipSelected]} onPress={() => handleSelectSport(sport)} activeOpacity={0.7}><Text style={[styles.chipText, sel && styles.chipTextSelected]}>{sport}</Text>{sel && <Ionicons name="checkmark" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />}</TouchableOpacity>;
           })}
         </View>
-        <TouchableOpacity style={sportStyles.moreSportsHeader} onPress={toggleMoreSports} activeOpacity={0.7}>
-          <Text style={sportStyles.moreSportsTitle}>More Sports</Text>
-          <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}><Ionicons name="chevron-down" size={16} color="#9B9B9B" /></Animated.View>
+        <TouchableOpacity style={styles.moreSportsHeader} onPress={toggleMoreSports} activeOpacity={0.7}>
+          <Text style={styles.moreSportsTitle}>More Sports</Text>
+          <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}><Ionicons name="chevron-down" size={16} color={colors.textTertiary} /></Animated.View>
         </TouchableOpacity>
         {moreSportsExpanded && (
-          <View style={sportStyles.moreSportsContent}>
+          <View style={styles.moreSportsContent}>
             {MORE_SPORTS_DATA.map((cat) => (
               <View key={cat.category}>
-                <View style={bsStyles.categoryHeader}><Text style={bsStyles.categoryText}>{cat.category}</Text></View>
+                <View style={styles.categoryHeader}><Text style={styles.categoryText}>{cat.category}</Text></View>
                 {cat.sports.map((sport, i) => {
                   const sel = (!isSportOther && selectedSport === sport) || (isSportOther && sport === 'Other');
-                  return <TouchableOpacity key={`${sport}-${i}`} style={bsStyles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={bsStyles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
+                  return <TouchableOpacity key={`${sport}-${i}`} style={styles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={styles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
                 })}
               </View>
             ))}
@@ -573,22 +577,22 @@ export default function ManualAddBetScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={colors.statusBar} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Back Button */}
         <FadeInView delay={0} direction="none">
           <AnimatedPressable style={styles.backButton} onPress={() => router.back()} scaleDown={0.9}>
-            <Ionicons name="arrow-back" size={22} color="#1A1A1A" />
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
           </AnimatedPressable>
         </FadeInView>
 
         {/* AI Banner */}
         {hasRouteParams && showAiBanner && (
-          <View style={aiStyles.banner}>
+          <View style={styles.banner}>
             <Ionicons name="sparkles" size={18} color="#6C63FF" />
-            <View style={aiStyles.bannerTextWrap}>
-              <Text style={aiStyles.bannerText}>AI-extracted — please review before saving</Text>
-              {confidence !== null && <Text style={aiStyles.confidenceText}>Confidence: {Math.round(confidence * 100)}%</Text>}
+            <View style={styles.bannerTextWrap}>
+              <Text style={styles.bannerText}>AI-extracted — please review before saving</Text>
+              {confidence !== null && <Text style={styles.confidenceText}>Confidence: {Math.round(confidence * 100)}%</Text>}
             </View>
             <TouchableOpacity onPress={() => setShowAiBanner(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close" size={16} color="#6C63FF" />
@@ -602,15 +606,15 @@ export default function ManualAddBetScreen() {
             <Text style={styles.fieldLabel}>Where did you place this bet?</Text>
             {isPlatformOther ? (
               <View style={styles.customInputContainer}>
-                <TextInput style={styles.customInput} placeholder="Type platform name..." placeholderTextColor="#9B9B9B" value={customPlatform} onChangeText={setCustomPlatform} />
+                <TextInput style={styles.customInput} placeholder="Type platform name..." placeholderTextColor={colors.placeholder} value={customPlatform} onChangeText={setCustomPlatform} />
                 <TouchableOpacity style={styles.clearButton} onPress={handleClearPlatform} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close" size={14} color="#9B9B9B" /><Text style={styles.clearText}>Clear</Text>
+                  <Ionicons name="close" size={14} color={colors.textTertiary} /><Text style={styles.clearText}>Clear</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity style={styles.dropdownInput} onPress={openPlatformSheet} activeOpacity={0.7}>
                 <Text style={[styles.dropdownValueText, !selectedPlatform && styles.dropdownPlaceholderText]}>{selectedPlatform || 'Select a platform...'}</Text>
-                <Ionicons name="chevron-down" size={18} color="#9B9B9B" style={styles.dropdownIcon} />
+                <Ionicons name="chevron-down" size={18} color={colors.textTertiary} style={styles.dropdownIcon} />
               </TouchableOpacity>
             )}
           </View>
@@ -638,15 +642,15 @@ export default function ManualAddBetScreen() {
             <Text style={styles.fieldLabel}>What sport?</Text>
             {isSportOther ? (
               <View style={styles.customInputContainer}>
-                <TextInput style={styles.customInput} placeholder="Type sport name..." placeholderTextColor="#9B9B9B" value={customSport} onChangeText={setCustomSport} />
+                <TextInput style={styles.customInput} placeholder="Type sport name..." placeholderTextColor={colors.placeholder} value={customSport} onChangeText={setCustomSport} />
                 <TouchableOpacity style={styles.clearButton} onPress={handleClearSport} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close" size={14} color="#9B9B9B" /><Text style={styles.clearText}>Clear</Text>
+                  <Ionicons name="close" size={14} color={colors.textTertiary} /><Text style={styles.clearText}>Clear</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity style={styles.dropdownInput} onPress={openSportSheet} activeOpacity={0.7}>
                 <Text style={[styles.dropdownValueText, !selectedSport && styles.dropdownPlaceholderText]}>{selectedSport || 'Select a sport...'}</Text>
-                <Ionicons name="chevron-down" size={18} color="#9B9B9B" style={styles.dropdownIcon} />
+                <Ionicons name="chevron-down" size={18} color={colors.textTertiary} style={styles.dropdownIcon} />
               </TouchableOpacity>
             )}
           </View>
@@ -656,7 +660,7 @@ export default function ManualAddBetScreen() {
         <FadeInView delay={240} direction="bottom">
           <View style={styles.formField}>
             <Text style={styles.fieldLabel}>Who's playing? (Matchup/Event)</Text>
-            <TextInput style={styles.textInput} placeholder="e.g., Lakers vs Warriors" placeholderTextColor="#9B9B9B" value={matchup} onChangeText={setMatchup} />
+            <TextInput style={styles.textInput} placeholder="e.g., Lakers vs Warriors" placeholderTextColor={colors.placeholder} value={matchup} onChangeText={setMatchup} />
           </View>
         </FadeInView>
 
@@ -664,7 +668,7 @@ export default function ManualAddBetScreen() {
         <FadeInView delay={300} direction="bottom">
           <View style={styles.formField}>
             <Text style={styles.fieldLabel}>Describe your bet</Text>
-            <TextInput style={[styles.textInput, styles.textareaInput]} placeholder="e.g., Lakers -5.5, Over 225.5" placeholderTextColor="#9B9B9B" multiline numberOfLines={3} textAlignVertical="top" value={description} onChangeText={setDescription} />
+            <TextInput style={[styles.textInput, styles.textareaInput]} placeholder="e.g., Lakers -5.5, Over 225.5" placeholderTextColor={colors.placeholder} multiline numberOfLines={3} textAlignVertical="top" value={description} onChangeText={setDescription} />
           </View>
         </FadeInView>
 
@@ -679,7 +683,7 @@ export default function ManualAddBetScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <TextInput style={styles.textInput} placeholder={getOddsPlaceholder()} placeholderTextColor="#9B9B9B" value={odds} onChangeText={setOdds} />
+            <TextInput style={styles.textInput} placeholder={getOddsPlaceholder()} placeholderTextColor={colors.placeholder} value={odds} onChangeText={setOdds} />
           </View>
         </FadeInView>
 
@@ -689,7 +693,7 @@ export default function ManualAddBetScreen() {
             <Text style={styles.fieldLabel}>How much did you wager?</Text>
             <View style={styles.currencyInputContainer}>
               <Text style={styles.currencySymbol}>$</Text>
-              <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" keyboardType="decimal-pad" value={wager} onChangeText={setWager} />
+              <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor={colors.placeholder} keyboardType="decimal-pad" value={wager} onChangeText={setWager} />
             </View>
           </View>
         </FadeInView>
@@ -704,7 +708,7 @@ export default function ManualAddBetScreen() {
             <RAnimated.View style={payoutStyle}>
               <View style={[styles.currencyInputContainer, styles.readOnlyInput]}>
                 <Text style={styles.currencySymbol}>$</Text>
-                <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor="#9B9B9B" editable={false} value={potentialPayout} />
+                <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor={colors.placeholder} editable={false} value={potentialPayout} />
               </View>
             </RAnimated.View>
           </View>
@@ -727,7 +731,7 @@ export default function ManualAddBetScreen() {
           <View style={styles.formField}>
             <Text style={styles.fieldLabel}>When was this bet placed?</Text>
             <TouchableOpacity style={styles.dropdownInput} onPress={handleOpenDatePicker} activeOpacity={0.7}>
-              <Ionicons name="calendar-outline" size={18} color="#9B9B9B" style={{ marginRight: 10 }} />
+              <Ionicons name="calendar-outline" size={18} color={colors.textTertiary} style={{ marginRight: 10 }} />
               <Text style={[styles.dropdownValueText, !placedAt && styles.dropdownPlaceholderText]}>
                 {placedAt ? formatDateDisplay(placedAt) : 'Select date and time'}
               </Text>
@@ -737,14 +741,14 @@ export default function ManualAddBetScreen() {
             {Platform.OS === 'web' && showDatePicker && (
               <Modal visible transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
                 <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
-                  <View style={dateStyles.overlay}>
+                  <View style={styles.dateOverlay}>
                     <TouchableWithoutFeedback onPress={() => {}}>
-                      <View style={dateStyles.webPickerCard}>
-                        <Text style={dateStyles.webPickerTitle}>Select date and time</Text>
-                        <View style={dateStyles.webInputRow}>
-                          <Text style={dateStyles.webLabel}>Date</Text>
+                      <View style={styles.webPickerCard}>
+                        <Text style={styles.webPickerTitle}>Select date and time</Text>
+                        <View style={styles.webInputRow}>
+                          <Text style={styles.webLabel}>Date</Text>
                           <TextInput
-                            style={dateStyles.webInput}
+                            style={styles.webInput}
                             value={`${tempDate.getFullYear()}-${String(tempDate.getMonth() + 1).padStart(2, '0')}-${String(tempDate.getDate()).padStart(2, '0')}`}
                             onChangeText={(text) => {
                               const parts = text.split('-');
@@ -754,13 +758,13 @@ export default function ManualAddBetScreen() {
                               }
                             }}
                             placeholder="YYYY-MM-DD"
-                            placeholderTextColor="#9B9B9B"
+                            placeholderTextColor={colors.placeholder}
                           />
                         </View>
-                        <View style={dateStyles.webInputRow}>
-                          <Text style={dateStyles.webLabel}>Time</Text>
+                        <View style={styles.webInputRow}>
+                          <Text style={styles.webLabel}>Time</Text>
                           <TextInput
-                            style={dateStyles.webInput}
+                            style={styles.webInput}
                             value={`${String(tempDate.getHours()).padStart(2, '0')}:${String(tempDate.getMinutes()).padStart(2, '0')}`}
                             onChangeText={(text) => {
                               const parts = text.split(':');
@@ -771,15 +775,15 @@ export default function ManualAddBetScreen() {
                               }
                             }}
                             placeholder="HH:MM"
-                            placeholderTextColor="#9B9B9B"
+                            placeholderTextColor={colors.placeholder}
                           />
                         </View>
-                        <View style={dateStyles.webButtonRow}>
-                          <TouchableOpacity style={dateStyles.webCancelBtn} onPress={() => setShowDatePicker(false)}>
-                            <Text style={dateStyles.webCancelText}>Cancel</Text>
+                        <View style={styles.webButtonRow}>
+                          <TouchableOpacity style={styles.webCancelBtn} onPress={() => setShowDatePicker(false)}>
+                            <Text style={styles.webCancelText}>Cancel</Text>
                           </TouchableOpacity>
-                          <TouchableOpacity style={dateStyles.webConfirmBtn} onPress={handleConfirmWebDate}>
-                            <Text style={dateStyles.webConfirmText}>Confirm</Text>
+                          <TouchableOpacity style={styles.webConfirmBtn} onPress={handleConfirmWebDate}>
+                            <Text style={styles.webConfirmText}>Confirm</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -816,14 +820,14 @@ export default function ManualAddBetScreen() {
                     <TextInput
                       style={[styles.textInput, styles.parlayLegInput]}
                       placeholder="e.g. Lakers ML"
-                      placeholderTextColor="#9B9B9B"
+                      placeholderTextColor={colors.placeholder}
                       value={leg.description}
                       onChangeText={(val) => updateParlayLeg(index, 'description', val)}
                     />
                     <TextInput
                       style={[styles.textInput, styles.parlayLegInput]}
                       placeholder="e.g. +120"
-                      placeholderTextColor="#9B9B9B"
+                      placeholderTextColor={colors.placeholder}
                       value={leg.odds}
                       onChangeText={(val) => updateParlayLeg(index, 'odds', val)}
                     />
@@ -879,7 +883,7 @@ export default function ManualAddBetScreen() {
         <FadeInView delay={720} direction="bottom">
           <View style={styles.formField}>
             <Text style={styles.fieldLabel}>Notes (Optional)</Text>
-            <TextInput style={[styles.textInput, styles.textareaInputLarge]} placeholder="Why did you make this bet?" placeholderTextColor="#9B9B9B" multiline numberOfLines={4} textAlignVertical="top" value={notes} onChangeText={setNotes} />
+            <TextInput style={[styles.textInput, styles.textareaInputLarge]} placeholder="Why did you make this bet?" placeholderTextColor={colors.placeholder} multiline numberOfLines={4} textAlignVertical="top" value={notes} onChangeText={setNotes} />
           </View>
         </FadeInView>
 
@@ -888,19 +892,19 @@ export default function ManualAddBetScreen() {
           <View style={styles.formField}>
             <Text style={styles.fieldLabel}>Upload Ticket Screenshot (Optional)</Text>
             {ticketImageUrl ? (
-              <View style={aiStyles.imagePreviewWrap}>
-                <Image source={{ uri: ticketImageUrl }} style={aiStyles.imagePreview} resizeMode="cover" />
-                <TouchableOpacity style={aiStyles.imageRemoveBtn} onPress={() => setTicketImageUrl('')} activeOpacity={0.7}>
+              <View style={styles.imagePreviewWrap}>
+                <Image source={{ uri: ticketImageUrl }} style={styles.imagePreview} resizeMode="cover" />
+                <TouchableOpacity style={styles.imageRemoveBtn} onPress={() => setTicketImageUrl('')} activeOpacity={0.7}>
                   <Ionicons name="close" size={14} color="#FFFFFF" />
                 </TouchableOpacity>
-                <TouchableOpacity style={aiStyles.retakeBtn} activeOpacity={0.7} onPress={() => setTicketImageUrl('')}>
-                  <Text style={aiStyles.retakeText}>Retake / Re-upload</Text>
+                <TouchableOpacity style={styles.retakeBtn} activeOpacity={0.7} onPress={() => setTicketImageUrl('')}>
+                  <Text style={styles.retakeText}>Retake / Re-upload</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <>
                 <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7}>
-                  <Ionicons name="cloud-upload-outline" size={28} color="#9B9B9B" />
+                  <Ionicons name="cloud-upload-outline" size={28} color={colors.textTertiary} />
                   <Text style={styles.uploadTitle}>Choose Photo or Take Photo</Text>
                   <Text style={styles.uploadHint}>PNG, JPG up to 10MB</Text>
                 </TouchableOpacity>
@@ -936,7 +940,7 @@ export default function ManualAddBetScreen() {
             scaleDown={0.98}
           >
             {isSaving ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={colors.buttonPrimaryText} />
             ) : (
               <Text style={styles.submitButtonText}>Save Bet</Text>
             )}
@@ -946,29 +950,29 @@ export default function ManualAddBetScreen() {
 
       {/* Platform Bottom Sheet */}
       <Modal visible={platformSheet.visible} transparent animationType="none" onRequestClose={platformSheet.closeSheet}>
-        <View style={bsStyles.modalContainer}>
-          <TouchableWithoutFeedback onPress={platformSheet.closeSheet}><Animated.View style={[bsStyles.overlay, { opacity: platformSheet.overlayAnim }]} /></TouchableWithoutFeedback>
-          <Animated.View style={[bsStyles.sheet, { transform: [{ translateY: platformSheet.slideAnim }] }]}>
-            <View style={bsStyles.handleArea} {...platformSheet.panResponder.panHandlers}><View style={bsStyles.handle} /></View>
-            <View style={bsStyles.searchContainer}>
-              <Ionicons name="search" size={18} color="#9B9B9B" style={bsStyles.searchIcon} />
-              <TextInput style={bsStyles.searchInput} placeholder="Search platforms..." placeholderTextColor="#9B9B9B" value={platformSearch} onChangeText={setPlatformSearch} autoCorrect={false} autoCapitalize="none" />
+        <View style={styles.modalContainer}>
+          <TouchableWithoutFeedback onPress={platformSheet.closeSheet}><Animated.View style={[styles.sheetOverlay, { opacity: platformSheet.overlayAnim }]} /></TouchableWithoutFeedback>
+          <Animated.View style={[styles.sheet, { transform: [{ translateY: platformSheet.slideAnim }] }]}>
+            <View style={styles.handleArea} {...platformSheet.panResponder.panHandlers}><View style={styles.handle} /></View>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={18} color={colors.textTertiary} style={styles.searchIcon} />
+              <TextInput style={styles.searchInput} placeholder="Search platforms..." placeholderTextColor={colors.placeholder} value={platformSearch} onChangeText={setPlatformSearch} autoCorrect={false} autoCapitalize="none" />
               {platformSearch.length > 0 && <TouchableOpacity onPress={() => setPlatformSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close-circle" size={18} color="#C0C0C0" /></TouchableOpacity>}
             </View>
-            <FlatList data={filteredPlatformItems} renderItem={renderPlatformItem} keyExtractor={(item, i) => item.type === 'category' ? `pcat-${item.category}` : `pplat-${(item as any).name}-${i}`} contentContainerStyle={bsStyles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} ListEmptyComponent={<View style={bsStyles.emptyContainer}><Text style={bsStyles.emptyText}>No platforms found</Text></View>} />
+            <FlatList data={filteredPlatformItems} renderItem={renderPlatformItem} keyExtractor={(item, i) => item.type === 'category' ? `pcat-${item.category}` : `pplat-${(item as any).name}-${i}`} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} ListEmptyComponent={<View style={styles.emptyContainer}><Text style={styles.emptyText}>No platforms found</Text></View>} />
           </Animated.View>
         </View>
       </Modal>
 
       {/* Sport Bottom Sheet */}
       <Modal visible={sportSheet.visible} transparent animationType="none" onRequestClose={sportSheet.closeSheet}>
-        <View style={bsStyles.modalContainer}>
-          <TouchableWithoutFeedback onPress={sportSheet.closeSheet}><Animated.View style={[bsStyles.overlay, { opacity: sportSheet.overlayAnim }]} /></TouchableWithoutFeedback>
-          <Animated.View style={[bsStyles.sheet, { transform: [{ translateY: sportSheet.slideAnim }] }]}>
-            <View style={bsStyles.handleArea} {...sportSheet.panResponder.panHandlers}><View style={bsStyles.handle} /></View>
-            <View style={bsStyles.searchContainer}>
-              <Ionicons name="search" size={18} color="#9B9B9B" style={bsStyles.searchIcon} />
-              <TextInput style={bsStyles.searchInput} placeholder="Search sports..." placeholderTextColor="#9B9B9B" value={sportSearch} onChangeText={setSportSearch} autoCorrect={false} autoCapitalize="none" />
+        <View style={styles.modalContainer}>
+          <TouchableWithoutFeedback onPress={sportSheet.closeSheet}><Animated.View style={[styles.sheetOverlay, { opacity: sportSheet.overlayAnim }]} /></TouchableWithoutFeedback>
+          <Animated.View style={[styles.sheet, { transform: [{ translateY: sportSheet.slideAnim }] }]}>
+            <View style={styles.handleArea} {...sportSheet.panResponder.panHandlers}><View style={styles.handle} /></View>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={18} color={colors.textTertiary} style={styles.searchIcon} />
+              <TextInput style={styles.searchInput} placeholder="Search sports..." placeholderTextColor={colors.placeholder} value={sportSearch} onChangeText={setSportSearch} autoCorrect={false} autoCapitalize="none" />
               {sportSearch.length > 0 && <TouchableOpacity onPress={() => setSportSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close-circle" size={18} color="#C0C0C0" /></TouchableOpacity>}
             </View>
             {renderSportSheetContent()}
@@ -979,132 +983,128 @@ export default function ManualAddBetScreen() {
   );
 }
 
-// ── AI styles ──
-const aiStyles = StyleSheet.create({
-  banner: { backgroundColor: '#F0EEFF', borderRadius: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, marginBottom: 20, gap: 10 },
-  bannerTextWrap: { flex: 1 },
-  bannerText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
-  confidenceText: { fontSize: 12, fontWeight: '400', color: '#9B9B9B', marginTop: 2 },
-  payoutNote: { fontSize: 12, fontWeight: '400', color: '#6C63FF', marginTop: 6 },
-  imagePreviewWrap: { position: 'relative', marginBottom: 12 },
-  imagePreview: { width: '100%', height: 120, borderRadius: 10, backgroundColor: '#E0E0E0' },
-  imageRemoveBtn: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
-  retakeBtn: { alignItems: 'center', paddingVertical: 10 },
-  retakeText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
-  parlayHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  parlayCountBadge: { backgroundColor: '#6C63FF', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
-  parlayCountText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
-  parlayLegCard: { backgroundColor: '#F9F9F9', borderRadius: 10, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  parlayLegContent: { flex: 1 },
-  parlayLegInput: { marginBottom: 8 },
-  parlayLegStatusRow: { flexDirection: 'row', gap: 6 },
-  parlayStatusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: '#E5E7EB', borderWidth: 1, borderColor: '#E5E7EB' },
-  parlayStatusPending: { backgroundColor: 'transparent', borderColor: '#2DC672' },
-  parlayStatusWon: { backgroundColor: '#2DC672', borderColor: '#2DC672' },
-  parlayStatusLost: { backgroundColor: '#E85D5D', borderColor: '#E85D5D' },
-  parlayStatusText: { fontSize: 12, fontWeight: '600', color: '#4A4A4A' },
-  parlayStatusTextActive: { color: '#FFFFFF' },
-  parlayDeleteBtn: { padding: 4 },
-  addLegButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#6366F1', borderStyle: 'dashed' },
-  addLegText: { fontSize: 14, fontWeight: '600', color: '#6366F1' },
-});
+// ── Unified createStyles ──
 
-// ── Date picker styles ──
-const dateStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: '#00000066', justifyContent: 'center', alignItems: 'center' },
-  webPickerCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, width: 320 },
-  webPickerTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', marginBottom: 20, textAlign: 'center' },
-  webInputRow: { marginBottom: 16 },
-  webLabel: { fontSize: 13, fontWeight: '600', color: '#4A4A4A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
-  webInput: { backgroundColor: '#F0F0F0', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: '#1A1A1A', height: 46 },
-  webButtonRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  webCancelBtn: { flex: 1, backgroundColor: '#F0F0F0', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  webCancelText: { fontSize: 15, fontWeight: '600', color: '#4A4A4A' },
-  webConfirmBtn: { flex: 1, backgroundColor: '#10B981', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  webConfirmText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
-});
+function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext').useTheme>['colors']) {
+  return StyleSheet.create({
+    // ── AI styles ──
+    banner: { backgroundColor: '#F0EEFF', borderRadius: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, marginBottom: 20, gap: 10 },
+    bannerTextWrap: { flex: 1 },
+    bannerText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
+    confidenceText: { fontSize: 12, fontWeight: '400', color: colors.textTertiary, marginTop: 2 },
+    payoutNote: { fontSize: 12, fontWeight: '400', color: '#6C63FF', marginTop: 6 },
+    imagePreviewWrap: { position: 'relative', marginBottom: 12 },
+    imagePreview: { width: '100%', height: 120, borderRadius: 10, backgroundColor: colors.dividerLine },
+    imageRemoveBtn: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+    retakeBtn: { alignItems: 'center', paddingVertical: 10 },
+    retakeText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
+    parlayHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+    parlayCountBadge: { backgroundColor: '#6C63FF', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+    parlayCountText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
+    parlayLegCard: { backgroundColor: colors.input, borderRadius: 10, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    parlayLegContent: { flex: 1 },
+    parlayLegInput: { marginBottom: 8 },
+    parlayLegStatusRow: { flexDirection: 'row', gap: 6 },
+    parlayStatusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: colors.border, borderWidth: 1, borderColor: colors.border },
+    parlayStatusPending: { backgroundColor: 'transparent', borderColor: '#2DC672' },
+    parlayStatusWon: { backgroundColor: '#2DC672', borderColor: '#2DC672' },
+    parlayStatusLost: { backgroundColor: '#E85D5D', borderColor: '#E85D5D' },
+    parlayStatusText: { fontSize: 12, fontWeight: '600', color: '#4A4A4A' },
+    parlayStatusTextActive: { color: '#FFFFFF' },
+    parlayDeleteBtn: { padding: 4 },
+    addLegButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#6366F1', borderStyle: 'dashed' },
+    addLegText: { fontSize: 14, fontWeight: '600', color: '#6366F1' },
 
-// ── Shared bottom sheet styles ──
-const bsStyles = StyleSheet.create({
-  modalContainer: { flex: 1, justifyContent: 'flex-end' },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#00000066' },
-  sheet: { height: SHEET_HEIGHT, backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
-  handleArea: { paddingTop: 12, paddingBottom: 8, alignItems: 'center' },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#D0D0D0' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F0F0', borderRadius: 10, marginHorizontal: 16, marginTop: 8, marginBottom: 8, paddingHorizontal: 12, height: 44 },
-  searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 14, color: '#1A1A1A', height: 44 },
-  listContent: { paddingBottom: 40 },
-  categoryHeader: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 },
-  categoryText: { fontSize: 11, fontWeight: '700', color: '#999999', textTransform: 'uppercase', letterSpacing: 1 },
-  listRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 50, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  listRowText: { fontSize: 15, fontWeight: '400', color: '#1A1A1A', flex: 1 },
-  emptyContainer: { paddingTop: 40, alignItems: 'center' },
-  emptyText: { fontSize: 15, color: '#9B9B9B' },
-});
+    // ── Date picker styles ──
+    dateOverlay: { flex: 1, backgroundColor: '#00000066', justifyContent: 'center', alignItems: 'center' },
+    webPickerCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 24, width: 320 },
+    webPickerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 20, textAlign: 'center' },
+    webInputRow: { marginBottom: 16 },
+    webLabel: { fontSize: 13, fontWeight: '600', color: '#4A4A4A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+    webInput: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: colors.inputText, height: 46 },
+    webButtonRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+    webCancelBtn: { flex: 1, backgroundColor: colors.input, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+    webCancelText: { fontSize: 15, fontWeight: '600', color: '#4A4A4A' },
+    webConfirmBtn: { flex: 1, backgroundColor: '#10B981', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+    webConfirmText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
 
-// ── Sport-specific styles ──
-const sportStyles = StyleSheet.create({
-  chipsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10, marginBottom: 8 },
-  chip: { backgroundColor: '#F0F0F0', borderRadius: 10, paddingHorizontal: 16, height: 42, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', minWidth: '45%' as any, flexGrow: 1, flexBasis: '45%' as any },
-  chipSelected: { backgroundColor: '#10B981' },
-  chipText: { fontSize: 14, fontWeight: '500', color: '#1A1A1A' },
-  chipTextSelected: { color: '#FFFFFF', fontWeight: '600' },
-  moreSportsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, marginTop: 8, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
-  moreSportsTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
-  moreSportsContent: { paddingBottom: 20 },
-});
+    // ── Shared bottom sheet styles ──
+    modalContainer: { flex: 1, justifyContent: 'flex-end' },
+    sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#00000066' },
+    sheet: { height: SHEET_HEIGHT, backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+    handleArea: { paddingTop: 12, paddingBottom: 8, alignItems: 'center' },
+    handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#D0D0D0' },
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.input, borderRadius: 10, marginHorizontal: 16, marginTop: 8, marginBottom: 8, paddingHorizontal: 12, height: 44 },
+    searchIcon: { marginRight: 8 },
+    searchInput: { flex: 1, fontSize: 14, color: colors.inputText, height: 44 },
+    listContent: { paddingBottom: 40 },
+    categoryHeader: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8, backgroundColor: colors.chipBg },
+    categoryText: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 1 },
+    listRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 50, borderBottomWidth: 1, borderBottomColor: colors.input, backgroundColor: colors.surface },
+    listRowText: { fontSize: 15, fontWeight: '400', color: colors.text, flex: 1 },
+    emptyContainer: { paddingTop: 40, alignItems: 'center' },
+    emptyText: { fontSize: 15, color: colors.textTertiary },
 
-// ── Form styles ──
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 },
-  backButton: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: '#E8E8E8', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  formField: { marginBottom: 22 },
-  fieldLabel: { fontSize: 16, fontWeight: '700', color: '#1A1A1A', marginBottom: 10 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  labelHint: { fontSize: 13, fontWeight: '400', color: '#9B9B9B', marginLeft: 6 },
-  textInput: { backgroundColor: '#F0F0F0', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, fontSize: 14, fontWeight: '400', color: '#1A1A1A', height: 50 },
-  textareaInput: { height: 90, paddingTop: 14 },
-  textareaInputLarge: { height: 110, paddingTop: 14 },
-  dropdownInput: { backgroundColor: '#F0F0F0', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, height: 50, justifyContent: 'center', flexDirection: 'row', alignItems: 'center' },
-  dropdownValueText: { flex: 1, fontSize: 14, fontWeight: '400', color: '#1A1A1A' },
-  dropdownPlaceholderText: { color: '#9B9B9B' },
-  dropdownIcon: { marginLeft: 8 },
-  dateInputPlaceholder: { flex: 1 },
-  customInputContainer: { backgroundColor: '#F0F0F0', borderRadius: 10, paddingHorizontal: 16, height: 50, flexDirection: 'row', alignItems: 'center' },
-  customInput: { flex: 1, fontSize: 14, fontWeight: '400', color: '#1A1A1A', height: 50 },
-  clearButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8 },
-  clearText: { fontSize: 13, fontWeight: '500', color: '#9B9B9B' },
-  pillsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  pill: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D0D0', borderRadius: 9, paddingHorizontal: 18, paddingVertical: 10, height: 38, justifyContent: 'center' },
-  pillActive: { backgroundColor: '#10B981', borderColor: '#10B981' },
-  pillText: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
-  pillTextActive: { color: '#FFFFFF' },
-  oddsFormatContainer: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  oddsFormatPill: { paddingHorizontal: 16, paddingVertical: 8, height: 32, justifyContent: 'center' },
-  oddsFormatPillActive: { backgroundColor: '#1A1A1A', borderRadius: 6 },
-  oddsFormatText: { fontSize: 13, fontWeight: '600', color: '#1A1A1A' },
-  oddsFormatTextActive: { color: '#FFFFFF' },
-  currencyInputContainer: { backgroundColor: '#F0F0F0', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, height: 50, flexDirection: 'row', alignItems: 'center' },
-  readOnlyInput: { backgroundColor: '#EBEBEB' },
-  currencySymbol: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', marginRight: 8 },
-  currencyInput: { flex: 1, fontSize: 14, fontWeight: '400', color: '#1A1A1A' },
-  statusContainer: { flexDirection: 'row', gap: 10 },
-  statusPill: { borderRadius: 9, paddingHorizontal: 16, paddingVertical: 10, height: 38, justifyContent: 'center' },
-  statusPillText: { fontSize: 14, fontWeight: '600' },
-  uploadArea: { backgroundColor: '#F8F8F8', borderRadius: 10, borderWidth: 1, borderColor: '#E0E0E0', borderStyle: 'dashed', paddingVertical: 30, alignItems: 'center', justifyContent: 'center', height: 130, marginBottom: 12 },
-  uploadTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', marginTop: 10 },
-  uploadHint: { fontSize: 12, fontWeight: '400', color: '#9B9B9B', marginTop: 4 },
-  takePhotoButton: { backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: '#E8E8E8', paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 46 },
-  takePhotoIcon: { marginRight: 8 },
-  takePhotoText: { fontSize: 14, fontWeight: '500', color: '#1A1A1A' },
-  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tag: { backgroundColor: '#F0F0F0', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 8, height: 34, justifyContent: 'center' },
-  tagSelected: { backgroundColor: '#E0E0E0', borderWidth: 1, borderColor: '#9B9B9B' },
-  tagText: { fontSize: 13, fontWeight: '500', color: '#4A4A4A' },
-  tagTextSelected: { color: '#1A1A1A', fontWeight: '600' },
-  submitButton: { backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', height: 54, marginTop: 10 },
-  submitButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
-});
+    // ── Sport-specific styles ──
+    chipsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10, marginBottom: 8 },
+    chip: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, height: 42, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', minWidth: '45%' as any, flexGrow: 1, flexBasis: '45%' as any },
+    chipSelected: { backgroundColor: '#10B981' },
+    chipText: { fontSize: 14, fontWeight: '500', color: colors.text },
+    chipTextSelected: { color: '#FFFFFF', fontWeight: '600' },
+    moreSportsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, marginTop: 8, borderTopWidth: 1, borderTopColor: colors.input },
+    moreSportsTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+    moreSportsContent: { paddingBottom: 20 },
+
+    // ── Form styles ──
+    container: { flex: 1, backgroundColor: colors.background },
+    scrollView: { flex: 1 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 },
+    backButton: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+    formField: { marginBottom: 22 },
+    fieldLabel: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 10 },
+    labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+    labelHint: { fontSize: 13, fontWeight: '400', color: colors.textTertiary, marginLeft: 6 },
+    textInput: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, fontSize: 14, fontWeight: '400', color: colors.inputText, height: 50 },
+    textareaInput: { height: 90, paddingTop: 14 },
+    textareaInputLarge: { height: 110, paddingTop: 14 },
+    dropdownInput: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, height: 50, justifyContent: 'center', flexDirection: 'row', alignItems: 'center' },
+    dropdownValueText: { flex: 1, fontSize: 14, fontWeight: '400', color: colors.inputText },
+    dropdownPlaceholderText: { color: colors.placeholder },
+    dropdownIcon: { marginLeft: 8 },
+    dateInputPlaceholder: { flex: 1 },
+    customInputContainer: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, height: 50, flexDirection: 'row', alignItems: 'center' },
+    customInput: { flex: 1, fontSize: 14, fontWeight: '400', color: colors.inputText, height: 50 },
+    clearButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8 },
+    clearText: { fontSize: 13, fontWeight: '500', color: colors.textTertiary },
+    pillsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    pill: { backgroundColor: colors.surface, borderWidth: 1, borderColor: '#D0D0D0', borderRadius: 9, paddingHorizontal: 18, paddingVertical: 10, height: 38, justifyContent: 'center' },
+    pillActive: { backgroundColor: '#10B981', borderColor: '#10B981' },
+    pillText: { fontSize: 14, fontWeight: '600', color: colors.text },
+    pillTextActive: { color: '#FFFFFF' },
+    oddsFormatContainer: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+    oddsFormatPill: { paddingHorizontal: 16, paddingVertical: 8, height: 32, justifyContent: 'center' },
+    oddsFormatPillActive: { backgroundColor: colors.buttonPrimary, borderRadius: 6 },
+    oddsFormatText: { fontSize: 13, fontWeight: '600', color: colors.text },
+    oddsFormatTextActive: { color: colors.buttonPrimaryText },
+    currencyInputContainer: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, height: 50, flexDirection: 'row', alignItems: 'center' },
+    readOnlyInput: { backgroundColor: colors.inputBorder },
+    currencySymbol: { fontSize: 16, fontWeight: '600', color: colors.inputText, marginRight: 8 },
+    currencyInput: { flex: 1, fontSize: 14, fontWeight: '400', color: colors.inputText },
+    statusContainer: { flexDirection: 'row', gap: 10 },
+    statusPill: { borderRadius: 9, paddingHorizontal: 16, paddingVertical: 10, height: 38, justifyContent: 'center' },
+    statusPillText: { fontSize: 14, fontWeight: '600' },
+    uploadArea: { backgroundColor: colors.input, borderRadius: 10, borderWidth: 1, borderColor: colors.dividerLine, borderStyle: 'dashed', paddingVertical: 30, alignItems: 'center', justifyContent: 'center', height: 130, marginBottom: 12 },
+    uploadTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginTop: 10 },
+    uploadHint: { fontSize: 12, fontWeight: '400', color: colors.textTertiary, marginTop: 4 },
+    takePhotoButton: { backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 46 },
+    takePhotoIcon: { marginRight: 8 },
+    takePhotoText: { fontSize: 14, fontWeight: '500', color: colors.text },
+    tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    tag: { backgroundColor: colors.input, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 8, height: 34, justifyContent: 'center' },
+    tagSelected: { backgroundColor: colors.dividerLine, borderWidth: 1, borderColor: colors.textTertiary },
+    tagText: { fontSize: 13, fontWeight: '500', color: '#4A4A4A' },
+    tagTextSelected: { color: colors.text, fontWeight: '600' },
+    submitButton: { backgroundColor: colors.buttonPrimary, borderRadius: 12, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', height: 54, marginTop: 10 },
+    submitButtonText: { fontSize: 16, fontWeight: '700', color: colors.buttonPrimaryText },
+  });
+}
