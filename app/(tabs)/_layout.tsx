@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import { useTheme } from '@/context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { Tabs } from 'expo-router';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
 
 function AddBetButton({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
@@ -17,7 +18,7 @@ function AddBetButton({ onPress }: { onPress: () => void }) {
 }
 
 export default function TabLayout() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   return (
     <Tabs
@@ -26,14 +27,28 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
         tabBarStyle: {
-          backgroundColor: colors.tabBar,
+          position: 'absolute',
+          backgroundColor: 'transparent',
           borderTopWidth: 0,
           height: 85,
           paddingBottom: 20,
           paddingTop: 8,
-          boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.06)',
-          elevation: 8,
+          elevation: 0,
         },
+        tabBarBackground: () => (
+          <BlurView intensity={85} tint={isDark ? 'dark' : 'light'} style={styles.blurContainer}>
+            <View
+              style={[
+                styles.blurOverlay,
+                {
+                  backgroundColor: isDark
+                    ? 'rgba(10, 10, 10, 0.5)'
+                    : 'rgba(255, 255, 255, 0.3)',
+                },
+              ]}
+            />
+          </BlurView>
+        ),
         tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
@@ -91,6 +106,13 @@ const styles = StyleSheet.create({
   tabBarLabel: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  blurContainer: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  blurOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   addBetButton: {
     top: -20,
