@@ -874,9 +874,7 @@ export default function EdgeScreen() {
                 const textColor =
                   d.count === 0
                     ? colors.textTertiary
-                    : isPositive
-                      ? GREEN
-                      : RED;
+                    : '#FFFFFF';
 
                 return (
                   <View key={d.day} style={styles.dayColumn}>
@@ -1039,7 +1037,7 @@ export default function EdgeScreen() {
           <View style={styles.header}>
             <View>
               <Text style={styles.headerTitle}>Edge</Text>
-              <Text style={styles.headerSubtitle}>Your competitive advantage analysis</Text>
+              <Text style={styles.headerSubtitle}>Your Competitive Advantage Analysis</Text>
             </View>
             <AnimatedPressable
               style={[styles.themeButton, { backgroundColor: colors.surface }]}
@@ -1446,7 +1444,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     dayBubbleText: {
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: '700',
     },
     dayLabel: {

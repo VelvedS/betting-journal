@@ -41,8 +41,8 @@ export default function AnimatedNumber({
   }, [value]);
 
   const formatted = decimals > 0
-    ? displayValue.toFixed(decimals)
-    : Math.round(displayValue).toString();
+    ? displayValue.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : Math.round(displayValue).toLocaleString('en-US');
 
   return (
     <Text style={style}>

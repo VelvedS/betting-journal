@@ -75,7 +75,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Weekly');
+  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Lifetime');
   const [recentBets, setRecentBets] = useState<any[]>([]);
   const [allBets, setAllBets] = useState<any[]>([]);
   const [cursorPL, setCursorPL] = useState<number | null>(null);
@@ -156,8 +156,8 @@ export default function HomeScreen() {
                       ]}
                     >
                       {displayProfit >= 0
-                        ? `$${Math.abs(displayProfit).toFixed(2)}`
-                        : `-$${Math.abs(displayProfit).toFixed(2)}`}
+                        ? `$${Math.abs(displayProfit).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+                        : `-$${Math.abs(displayProfit).toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
                     </Text>
                   ) : (
                     // Animated count-up for period total
@@ -165,7 +165,7 @@ export default function HomeScreen() {
                       key={selectedPeriod}
                       value={Math.abs(displayProfit)}
                       prefix={displayProfit >= 0 ? '$' : '-$'}
-                      decimals={2}
+                      decimals={0}
                       delay={0}
                       style={{ ...styles.profitValue, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}
                     />
@@ -184,7 +184,7 @@ export default function HomeScreen() {
                         ]}
                       >
                         {roiPct >= 0 ? '+' : '-'}
-                        {Math.abs(roiPct).toFixed(1)}%
+                        {Math.abs(roiPct).toLocaleString('en-US', { maximumFractionDigits: 0 })}%
                       </Text>
                     ) : (
                       <AnimatedNumber
@@ -192,7 +192,7 @@ export default function HomeScreen() {
                         value={Math.abs(roiPct)}
                         prefix={roiPct >= 0 ? '+' : '-'}
                         suffix="%"
-                        decimals={1}
+                        decimals={0}
                         delay={0}
                         style={{ ...styles.percentageText, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}
                       />
@@ -261,7 +261,7 @@ export default function HomeScreen() {
                   scaleDown={0.93}
                 >
                   <Text style={styles.viewAllText}>View All</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#6366F1" />
+                  <Ionicons name="arrow-forward" size={16} color="#2DC672" />
                 </AnimatedPressable>
               )}
             </View>
@@ -447,15 +447,15 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   },
   tab: {
     backgroundColor: colors.chipBg,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 16,
   },
   tabActive: {
     backgroundColor: colors.chipActiveBg,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: colors.textSecondary,
   },
@@ -500,7 +500,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   viewAllText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6366F1',
+    color: colors.text,
   },
   activityCard: {
     backgroundColor: colors.surface,

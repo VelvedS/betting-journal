@@ -121,10 +121,10 @@ export default function StatsScreen() {
   // Pre-calculate formatted values
   const winsStr = formatWholeNumber(wins);
   const lossesStr = formatWholeNumber(losses);
-  const netPLStr = formatPL(netPL);
-  const wageredStr = formatCurrency(totalWagered);
-  const winRateStr = formatPercent(winRateValue);
-  const roiStr = formatPercent(roiValue, true);
+  const netPLStr = netPL === 0 ? '$0' : (netPL > 0 ? '+' : '-') + '$' + Math.round(Math.abs(netPL)).toLocaleString('en-US');
+  const wageredStr = '$' + Math.round(totalWagered).toLocaleString('en-US');
+  const winRateStr = Math.round(winRateValue) + '%';
+  const roiStr = (roiValue > 0 ? '+' : '') + Math.round(roiValue) + '%';
 
   const subtitleText = filteredCount === 1 ? '1 Total Bet' : `${filteredCount} Total Bets`;
 

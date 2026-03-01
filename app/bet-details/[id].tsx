@@ -28,6 +28,7 @@ import FadeInView from '@/components/FadeInView';
 import { useTheme } from '@/context/ThemeContext';
 
 type BetStatus = 'pending' | 'won' | 'lost' | 'void';
+type ToastState = { message: string; type: 'error' } | null;
 
 const getLegStatusStyle = (status: string) => {
   switch (status) {
@@ -104,13 +105,13 @@ function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity
-        style={[styles.updatePill, { backgroundColor: s.bg, borderColor: s.border, borderWidth: s.bw }]}
+        style={[{ borderRadius: 9, paddingHorizontal: 16, paddingVertical: 10, height: 38, justifyContent: 'center' }, { backgroundColor: s.bg, borderColor: s.border, borderWidth: s.bw }]}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.7}
       >
-        <Text style={[styles.updatePillText, { color: s.text }]}>
+        <Text style={[{ fontSize: 14, fontWeight: '600' }, { color: s.text }]}>
           {value.charAt(0).toUpperCase() + value.slice(1)}
         </Text>
       </TouchableOpacity>
@@ -127,6 +128,10 @@ export default function BetDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [showStatusUpdate, setShowStatusUpdate] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -168,6 +173,43 @@ export default function BetDetailsScreen() {
       fetchBet();
     }, [fetchBet])
   );
+
+  const showToast = useCallback((message: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message, type: 'error' });
+    Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(
+        () => setToast(null)
+      );
+    }, 3000);
+  }, [toastOpacity]);
+
+  const handleDeleteBet = useCallback(() => {
+    Alert.alert(
+      'Delete Bet',
+      'Are you sure you want to delete this bet? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!bet) return;
+            setDeleting(true);
+            try {
+              const { error } = await supabase.from('bets').delete().eq('id', bet.id);
+              if (error) throw error;
+              router.back();
+            } catch (err: any) {
+              showToast(err.message || 'Failed to delete bet');
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [bet, router, showToast]);
 
   const handleUpdateStatus = async (newStatus: BetStatus) => {
     if (!bet) return;
@@ -267,7 +309,7 @@ export default function BetDetailsScreen() {
             onPress={() => setShowStatusUpdate(!showStatusUpdate)}
             scaleDown={0.95}
           >
-            <Ionicons name="swap-horizontal" size={16} color="#6366F1" />
+            <Ionicons name="swap-horizontal" size={16} color={colors.text} />
             <Text style={styles.updateStatusText}>Update Status</Text>
           </AnimatedPressable>
         </FadeInView>
@@ -383,7 +425,33 @@ export default function BetDetailsScreen() {
             </View>
           </FadeInView>
         ) : null}
+
+        {/* Delete Bet */}
+        <FadeInView delay={440} direction="bottom">
+          <AnimatedPressable
+            style={[styles.deleteButton, deleting && styles.deleteButtonDisabled]}
+            onPress={handleDeleteBet}
+            scaleDown={0.97}
+            disabled={deleting}
+          >
+            {deleting
+              ? <ActivityIndicator size="small" color="#E85D5D" style={{ marginRight: 8 }} />
+              : <Ionicons name="trash-outline" size={18} color="#E85D5D" style={{ marginRight: 8 }} />
+            }
+            <Text style={styles.deleteButtonText}>
+              {deleting ? 'Deleting…' : 'Delete Bet'}
+            </Text>
+          </AnimatedPressable>
+        </FadeInView>
       </ScrollView>
+
+      {/* Toast */}
+      {toast && (
+        <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
+          <Ionicons name="alert-circle" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+          <Text style={styles.toastText}>{toast.message}</Text>
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 }
@@ -402,7 +470,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     scrollContent: {
       paddingHorizontal: 20,
       paddingTop: 20,
-      paddingBottom: 40,
+      paddingBottom: 100,
     },
     header: {
       flexDirection: 'row',
@@ -463,13 +531,17 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       alignItems: 'center',
       justifyContent: 'center',
       gap: 6,
-      paddingVertical: 8,
+      paddingVertical: 12,
       marginBottom: 8,
+      backgroundColor: colors.surface,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
     updateStatusText: {
       fontSize: 14,
       fontWeight: '600',
-      color: '#6366F1',
+      color: colors.text,
     },
     updateStatusContainer: {
       backgroundColor: colors.surface,
@@ -646,6 +718,48 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     legStatusText: {
       fontSize: 13,
       fontWeight: '600',
+    },
+    deleteButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'transparent',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: '#E85D5D',
+      paddingVertical: 14,
+      marginTop: 4,
+    },
+    deleteButtonDisabled: {
+      opacity: 0.5,
+    },
+    deleteButtonText: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: '#E85D5D',
+    },
+    toast: {
+      position: 'absolute',
+      bottom: 40,
+      left: 20,
+      right: 20,
+      backgroundColor: '#E85D5D',
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.18,
+      shadowRadius: 8,
+      elevation: 6,
+    },
+    toastText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      flex: 1,
     },
   });
 }

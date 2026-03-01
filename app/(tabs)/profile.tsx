@@ -95,10 +95,10 @@ export default function ProfileScreen() {
   const profitColor = profit === null || profit >= 0 ? '#10B981' : '#E85D5D';
 
   const menuItems = [
-    { icon: 'person-outline', title: 'Account Settings', description: 'Manage your profile', route: '/account-settings' },
-    { icon: 'notifications-outline', title: 'Notifications', description: 'Push & email preferences', route: '/notifications' },
-    { icon: 'settings-outline', title: 'Preferences', description: 'App settings & privacy', route: '/preferences' },
-    { icon: 'help-circle-outline', title: 'Help & Support', description: 'FAQs and contact', route: '/help-support' },
+    { icon: 'person-outline', title: 'Account Settings', description: 'Manage Your Profile', route: '/account-settings' },
+    { icon: 'notifications-outline', title: 'Notifications', description: 'Push & Email Preferences', route: '/notifications' },
+    { icon: 'settings-outline', title: 'Preferences', description: 'App Settings & Privacy', route: '/preferences' },
+    { icon: 'help-circle-outline', title: 'Help & Support', description: 'FAQs & Contact Us', route: '/help-support' },
   ] as const;
 
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -111,7 +111,7 @@ export default function ProfileScreen() {
         <FadeInView delay={0} direction="bottom">
           <View style={styles.header}>
             <Text style={styles.title}>Profile</Text>
-            <Text style={styles.subtitle}>Manage your account settings</Text>
+            <Text style={styles.subtitle}>Manage Your Account Settings</Text>
           </View>
         </FadeInView>
 
