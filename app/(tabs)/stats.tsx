@@ -15,7 +15,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
-import { formatCurrency, formatPL, formatPercent, formatWholeNumber } from '@/lib/formatters';
+import { formatCurrency, formatROI, formatWholeNumber } from '@/lib/formatters';
+import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
 
@@ -36,6 +37,7 @@ export default function StatsScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { currency, showBalance } = usePreferences();
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All');
   const [allBets, setAllBets] = useState<any[]>([]);
 
@@ -121,10 +123,11 @@ export default function StatsScreen() {
   // Pre-calculate formatted values
   const winsStr = formatWholeNumber(wins);
   const lossesStr = formatWholeNumber(losses);
-  const netPLStr = netPL === 0 ? '$0' : (netPL > 0 ? '+' : '-') + '$' + Math.round(Math.abs(netPL)).toLocaleString('en-US');
-  const wageredStr = '$' + Math.round(totalWagered).toLocaleString('en-US');
+  const formattedNetPL = formatCurrency(netPL, currency, showBalance);
+  const netPLStr = showBalance && netPL > 0 ? `+${formattedNetPL}` : formattedNetPL;
+  const wageredStr = formatCurrency(totalWagered, currency, showBalance);
   const winRateStr = Math.round(winRateValue) + '%';
-  const roiStr = (roiValue > 0 ? '+' : '') + Math.round(roiValue) + '%';
+  const roiStr = formatROI(roiValue);
 
   const subtitleText = filteredCount === 1 ? '1 Total Bet' : `${filteredCount} Total Bets`;
 
@@ -241,16 +244,16 @@ export default function StatsScreen() {
           <FadeInView delay={100} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
-                <Ionicons name="bar-chart-outline" size={20} color={getValueColor(roiValue)} />
+                <Ionicons name="bar-chart-outline" size={20} color={showBalance ? getValueColor(roiValue) : colors.textSecondary} />
               </View>
               <Text style={styles.summaryLabel} numberOfLines={1}>ROI</Text>
               <Text
-                style={[styles.summaryValue, { color: getValueColor(roiValue), fontSize: getResponsiveFontSize(roiStr) }]}
+                style={[styles.summaryValue, { color: showBalance ? getValueColor(roiValue) : colors.textSecondary, fontSize: getResponsiveFontSize(showBalance ? roiStr : '••••') }]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.7}
               >
-                {roiStr}
+                {showBalance ? roiStr : '••••'}
               </Text>
             </View>
           </FadeInView>
@@ -297,7 +300,10 @@ export default function StatsScreen() {
           {hasBets ? (
             filteredBets.map((bet, index) => {
               const sc = getStatusConfig(bet.status);
-              const roiPctValue = bet.wager > 0 ? ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100 : 0;
+              const roiPctValue = !bet.wager || bet.wager <= 0 ? 0
+                : bet.status === 'lost' ? -100
+                : bet.status === 'void' ? 0
+                : ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100;
               const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
               return (
               <FadeInView key={bet.id} delay={500 + index * 60} direction="bottom">
@@ -321,15 +327,15 @@ export default function StatsScreen() {
                   <View style={styles.statsRow}>
                     <View style={styles.statColumn}>
                       <Text style={styles.statLabel}>WAGER</Text>
-                      <Text style={styles.statValue}>{formatCurrency(bet.wager)}</Text>
+                      <Text style={styles.statValue}>{formatCurrency(bet.wager, currency, showBalance)}</Text>
                     </View>
                     <View style={styles.statColumn}>
                       <Text style={styles.statLabel}>POTENTIAL</Text>
-                      <Text style={styles.statValue}>{formatCurrency(bet.potential_payout || 0)}</Text>
+                      <Text style={styles.statValue}>{formatCurrency(bet.potential_payout || 0, currency, showBalance)}</Text>
                     </View>
                     <View style={styles.statColumn}>
                       <Text style={styles.statLabel}>ROI</Text>
-                      <Text style={styles.roiValue}>{formatPercent(roiPctValue, true)}</Text>
+                      <Text style={[styles.roiValue, { color: showBalance ? (roiPctValue < 0 ? '#E85D5D' : '#10B981') : colors.textSecondary }]}>{showBalance ? formatROI(roiPctValue) : '••••'}</Text>
                     </View>
                   </View>
                   <View style={styles.betFooter}>

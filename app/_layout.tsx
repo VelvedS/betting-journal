@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider as AppThemeProvider, useTheme } from '@/context/ThemeContext';
+import { PreferencesProvider } from '@/context/PreferencesContext';
 
 function RootLayoutInner() {
   const { theme, colors } = useTheme();
@@ -35,7 +36,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppThemeProvider>
         <AuthProvider>
-          <RootLayoutInner />
+          <PreferencesProvider>
+            <RootLayoutInner />
+          </PreferencesProvider>
         </AuthProvider>
       </AppThemeProvider>
     </GestureHandlerRootView>

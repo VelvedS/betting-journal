@@ -26,6 +26,8 @@ import RAnimated, {
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
 import { useTheme } from '@/context/ThemeContext';
+import { usePreferences } from '@/context/PreferencesContext';
+import { formatCurrency, formatROI, formatOdds } from '@/lib/formatters';
 
 type BetStatus = 'pending' | 'won' | 'lost' | 'void';
 type ToastState = { message: string; type: 'error' } | null;
@@ -135,6 +137,7 @@ export default function BetDetailsScreen() {
 
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { currency, showBalance, oddsFormat } = usePreferences();
 
   const betId = typeof id === 'string' ? id : '';
 
@@ -256,7 +259,10 @@ export default function BetDetailsScreen() {
   const statusStyle = getStatusStyling(bet.status);
   const betType = bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : '';
 
-  const roiPct = bet.wager > 0 ? (((bet.potential_payout || 0) - bet.wager) / bet.wager * 100).toFixed(0) : '0';
+  const roiPctNum = !bet.wager || bet.wager <= 0 ? 0
+    : bet.status === 'lost' ? -100
+    : bet.status === 'void' ? 0
+    : ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100;
   const dateStr = bet.placed_at ? new Date(bet.placed_at).toLocaleDateString('en-US', {
     month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
   }) : '';
@@ -353,15 +359,15 @@ export default function BetDetailsScreen() {
             <View style={styles.statsRow}>
               <View style={styles.statColumn}>
                 <Text style={styles.statLabel}>WAGER</Text>
-                <Text style={styles.statValue}>${bet.wager}</Text>
+                <Text style={styles.statValue}>{formatCurrency(bet.wager, currency, showBalance)}</Text>
               </View>
               <View style={styles.statColumn}>
                 <Text style={styles.statLabel}>PAYOUT</Text>
-                <Text style={styles.statValue}>${(bet.potential_payout || 0).toFixed(2)}</Text>
+                <Text style={styles.statValue}>{formatCurrency(bet.potential_payout || 0, currency, showBalance)}</Text>
               </View>
               <View style={[styles.statColumn, styles.statColumnRight]}>
                 <Text style={styles.statLabel}>ROI</Text>
-                <Text style={styles.roiValue}>+{roiPct}%</Text>
+                <Text style={[styles.roiValue, { color: roiPctNum < 0 ? '#E85D5D' : '#10B981' }]}>{formatROI(roiPctNum)}</Text>
               </View>
             </View>
           </View>
@@ -397,7 +403,7 @@ export default function BetDetailsScreen() {
                       <View style={styles.legCardInner}>
                         <View style={styles.legInfo}>
                           <Text style={styles.legDescription}>{leg.description}</Text>
-                          <Text style={styles.legOdds}>{leg.odds}</Text>
+                          <Text style={styles.legOdds}>{formatOdds(leg.odds, oddsFormat)}</Text>
                         </View>
                         <View style={[styles.legStatusPill, { backgroundColor: legStyle.pillBg }]}>
                           <Text style={[styles.legStatusText, { color: legStyle.pillText }]}>

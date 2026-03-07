@@ -39,6 +39,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { usePreferences } from '@/context/PreferencesContext';
 import { supabase } from '@/lib/supabase';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
@@ -97,6 +98,7 @@ export default function PreferencesScreen() {
   const { user } = useAuth();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const { refresh: refreshPreferences } = usePreferences();
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
@@ -157,6 +159,7 @@ export default function PreferencesScreen() {
           updated_at: new Date().toISOString(),
         });
         if (error) throw error;
+        refreshPreferences();
         showToast('Saved');
       } catch {
         showToast('Failed to save', 'error');

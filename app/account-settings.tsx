@@ -259,7 +259,22 @@ export default function AccountSettingsScreen() {
               await supabase.from('bets').delete().eq('user_id', user.id);
               await supabase.from('profiles').delete().eq('id', user.id);
 
-              // Admin delete requires service role — sign out instead
+              // Step 4: call Edge Function to delete auth user
+              const { data: { session } } = await supabase.auth.getSession()
+              const response = await fetch(
+                `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${session?.access_token}`,
+                    'Content-Type': 'application/json'
+                  }
+                }
+              )
+              if (!response.ok) {
+                const err = await response.json()
+                throw new Error(err.error || 'Failed to delete account')
+              }
               await signOut();
             } catch (err: any) {
               Alert.alert('Error', err.message || 'Failed to delete account. Please try again.');

@@ -13,7 +13,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
-import { formatCurrency, formatPercent } from '@/lib/formatters';
+import { formatCurrency, formatROI, getCurrencySymbol } from '@/lib/formatters';
+import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
@@ -121,6 +122,9 @@ export default function HomeScreen() {
   const roiPct =
     periodWagered > 0 ? (displayProfit / periodWagered) * 100 : 0;
 
+  const { currency, showBalance } = usePreferences();
+  const currencySymbol = getCurrencySymbol(currency);
+
   const displayName = user?.user_metadata?.full_name?.split(' ')[0] || 'there';
 
   return (
@@ -155,20 +159,22 @@ export default function HomeScreen() {
                         { color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' },
                       ]}
                     >
-                      {displayProfit >= 0
-                        ? `$${Math.abs(displayProfit).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-                        : `-$${Math.abs(displayProfit).toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
+                      {formatCurrency(displayProfit, currency, showBalance)}
                     </Text>
-                  ) : (
+                  ) : showBalance ? (
                     // Animated count-up for period total
                     <AnimatedNumber
                       key={selectedPeriod}
                       value={Math.abs(displayProfit)}
-                      prefix={displayProfit >= 0 ? '$' : '-$'}
+                      prefix={displayProfit >= 0 ? currencySymbol : `-${currencySymbol}`}
                       decimals={0}
                       delay={0}
                       style={{ ...styles.profitValue, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}
                     />
+                  ) : (
+                    <Text style={{ ...styles.profitValue, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}>
+                      ••••
+                    </Text>
                   )}
                   <View style={styles.percentageContainer}>
                     <Ionicons
@@ -183,10 +189,9 @@ export default function HomeScreen() {
                           { color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' },
                         ]}
                       >
-                        {roiPct >= 0 ? '+' : '-'}
-                        {Math.abs(roiPct).toLocaleString('en-US', { maximumFractionDigits: 0 })}%
+                        {showBalance ? formatROI(roiPct) : '••••'}
                       </Text>
-                    ) : (
+                    ) : showBalance ? (
                       <AnimatedNumber
                         key={`pct-${selectedPeriod}`}
                         value={Math.abs(roiPct)}
@@ -196,11 +201,15 @@ export default function HomeScreen() {
                         delay={0}
                         style={{ ...styles.percentageText, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}
                       />
+                    ) : (
+                      <Text style={{ ...styles.percentageText, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}>
+                        ••••
+                      </Text>
                     )}
                   </View>
                 </>
               ) : (
-                <Text style={styles.profitValueEmpty}>$0</Text>
+                <Text style={styles.profitValueEmpty}>{formatCurrency(0, currency, showBalance)}</Text>
               )}
             </View>
           </View>
@@ -270,10 +279,10 @@ export default function HomeScreen() {
           {hasBets ? (
             recentBets.map((bet, index) => {
               const sc = getStatusConfig(bet.status);
-              const roiPctValue =
-                bet.wager > 0
-                  ? ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100
-                  : 0;
+              const roiPctValue = !bet.wager || bet.wager <= 0 ? 0
+                : bet.status === 'lost' ? -100
+                : bet.status === 'void' ? 0
+                : ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100;
               const ts = bet.placed_at
                 ? new Date(bet.placed_at).toLocaleDateString('en-US', {
                     month: 'short',
@@ -323,19 +332,19 @@ export default function HomeScreen() {
                       <View style={styles.statItem}>
                         <Text style={styles.statLabel}>WAGER</Text>
                         <Text style={styles.statValue}>
-                          {formatCurrency(bet.wager)}
+                          {formatCurrency(bet.wager, currency, showBalance)}
                         </Text>
                       </View>
                       <View style={styles.statItem}>
                         <Text style={styles.statLabel}>POTENTIAL</Text>
                         <Text style={styles.statValue}>
-                          {formatCurrency(bet.potential_payout || 0)}
+                          {formatCurrency(bet.potential_payout || 0, currency, showBalance)}
                         </Text>
                       </View>
                       <View style={styles.statItem}>
                         <Text style={styles.statLabel}>ROI</Text>
-                        <Text style={styles.roiValue}>
-                          {formatPercent(roiPctValue, true)}
+                        <Text style={[styles.roiValue, { color: roiPctValue < 0 ? '#E85D5D' : '#10B981' }]}>
+                          {showBalance ? formatROI(roiPctValue) : '••••'}
                         </Text>
                       </View>
                     </View>
