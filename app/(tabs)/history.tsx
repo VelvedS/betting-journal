@@ -707,7 +707,7 @@ export default function EdgeScreen() {
                 value={Math.abs(overallROI)}
                 prefix={overallROI >= 0 ? '+' : '-'}
                 suffix="%"
-                decimals={1}
+                decimals={0}
                 delay={200}
                 style={{
                   ...styles.statCardValue,
@@ -1263,7 +1263,7 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: 0.5,
     },
     statCardValue: {
-      fontSize: 32,
+      fontSize: 27,
       fontWeight: '700',
       color: colors.text,
     },

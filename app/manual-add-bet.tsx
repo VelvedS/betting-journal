@@ -183,13 +183,13 @@ function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity
-        style={[styles.statusPill, { backgroundColor: s.bg, borderColor: s.border, borderWidth: s.bw }]}
+        style={[{ borderRadius: 9, paddingHorizontal: 16, paddingVertical: 10, height: 38, justifyContent: 'center' }, { backgroundColor: s.bg, borderColor: s.border, borderWidth: s.bw }]}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.7}
       >
-        <Text style={[styles.statusPillText, { color: s.text }]}>
+        <Text style={[{ fontSize: 14, fontWeight: '600' }, { color: s.text }]}>
           {value.charAt(0).toUpperCase() + value.slice(1)}
         </Text>
       </TouchableOpacity>

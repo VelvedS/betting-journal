@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "betting-journal",
-    "slug": "betting-journal",
+    "name": "Ledgr",
+    "slug": "ledgr",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "bettingjournal",
+    "scheme": "ledgr",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
