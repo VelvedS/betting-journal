@@ -152,6 +152,9 @@ export default function ManualAddBetScreen() {
   const hasRouteParams = Object.keys(params).length > 0;
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+
+  const TAB_LABELS = ['Sportsbook Info', 'The Wager', 'Bet Details'];
 
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -525,7 +528,22 @@ export default function ManualAddBetScreen() {
           </View>
         )}
 
-        {/* ── Card 1: Bet Info ── */}
+        {/* ── Tab Bar ── */}
+        <View style={styles.tabBar}>
+          {TAB_LABELS.map((label, i) => (
+            <TouchableOpacity
+              key={label}
+              style={[styles.tab, activeTab === i && styles.tabActive]}
+              onPress={() => setActiveTab(i)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tabText, activeTab === i && styles.tabTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* ── Tab 1: Sportsbook Info ── */}
+        {activeTab === 0 && (
         <FadeInView delay={0} direction="bottom">
           <View style={styles.card}>
             <Text style={styles.cardTitle}>BET INFO</Text>
@@ -631,11 +649,13 @@ export default function ManualAddBetScreen() {
             />
           </View>
         </FadeInView>
+        )}
 
-        {/* ── Card 2: Financials ── */}
-        <FadeInView delay={80} direction="bottom">
+        {/* ── Tab 2: The Wager ── */}
+        {activeTab === 1 && (
+        <FadeInView delay={0} direction="bottom">
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>FINANCIALS</Text>
+            <Text style={styles.cardTitle}>THE WAGER</Text>
 
             {/* Odds */}
             <View style={styles.labelRow}>
@@ -705,11 +725,13 @@ export default function ManualAddBetScreen() {
             </View>
           </View>
         </FadeInView>
+        )}
 
-        {/* ── Card 3: Details ── */}
-        <FadeInView delay={160} direction="bottom">
+        {/* ── Tab 3: Bet Details ── */}
+        {activeTab === 2 && (
+        <FadeInView delay={0} direction="bottom">
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>DETAILS</Text>
+            <Text style={styles.cardTitle}>BET DETAILS</Text>
 
             {/* Date */}
             <Text style={styles.fieldLabel}>Date Placed</Text>
@@ -913,22 +935,39 @@ export default function ManualAddBetScreen() {
             )}
           </View>
         </FadeInView>
+        )}
 
-        {/* ── Save Button ── */}
-        <FadeInView delay={240} direction="bottom">
-          <AnimatedPressable
-            style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
-            onPress={handleSaveBet}
-            disabled={isSaving}
-            scaleDown={0.98}
-          >
-            {isSaving ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.saveBtnText}>Save Bet</Text>
-            )}
-          </AnimatedPressable>
-        </FadeInView>
+        {/* ── Navigation Buttons ── */}
+        <View style={styles.navRow}>
+          {activeTab > 0 ? (
+            <TouchableOpacity style={styles.navBtn} onPress={() => setActiveTab(activeTab - 1)} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
+              <Text style={styles.navBtnText}>Previous</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.navSpacer} />
+          )}
+
+          {activeTab < 2 ? (
+            <TouchableOpacity style={styles.navBtn} onPress={() => setActiveTab(activeTab + 1)} activeOpacity={0.7}>
+              <Text style={styles.navBtnText}>Next</Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          ) : (
+            <AnimatedPressable
+              style={[styles.saveBtn, isSaving && { opacity: 0.5 }]}
+              onPress={handleSaveBet}
+              disabled={isSaving}
+              scaleDown={0.98}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveBtnText}>Save Bet</Text>
+              )}
+            </AnimatedPressable>
+          )}
+        </View>
 
       </ScrollView>
 
@@ -1013,22 +1052,35 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     // Pills (bet type, platform, sport, tags)
     pillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     pill: { borderRadius: 20, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: 'transparent' },
-    pillActive: { backgroundColor: colors.buttonPrimary, borderColor: colors.buttonPrimary },
-    pillText: { fontSize: 13, fontWeight: '600', color: colors.text },
+    pillActive: { backgroundColor: '#2DC672', borderColor: '#2DC672' },
+    pillText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
     pillTextActive: { color: '#FFFFFF' },
 
     // Odds format toggle
     oddsFormatRow: { flexDirection: 'row', gap: 4 },
     fmtPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-    fmtPillActive: { backgroundColor: colors.buttonPrimary },
+    fmtPillActive: { backgroundColor: '#2DC672' },
     fmtText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
     fmtTextActive: { color: '#FFFFFF' },
 
     // Status
     statusRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
 
+    // Tab bar
+    tabBar: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, backgroundColor: colors.chipBg, borderRadius: 12, padding: 3 },
+    tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
+    tabActive: { backgroundColor: '#2DC672' },
+    tabText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+    tabTextActive: { color: '#FFFFFF', fontWeight: '700' },
+
+    // Navigation buttons
+    navRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: 20, marginTop: 4, gap: 12 },
+    navBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#2DC672', borderRadius: 14, paddingVertical: 16 },
+    navBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+    navSpacer: { flex: 1 },
+
     // Save button
-    saveBtn: { backgroundColor: colors.buttonPrimary, borderRadius: 14, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', marginHorizontal: 20, marginTop: 4 },
+    saveBtn: { flex: 1, backgroundColor: '#2DC672', borderRadius: 14, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
     saveBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
 
     // Parlay
