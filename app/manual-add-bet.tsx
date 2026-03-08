@@ -12,7 +12,6 @@ import {
   Dimensions,
   TouchableWithoutFeedback,
   PanResponder,
-  FlatList,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -35,6 +34,7 @@ import RAnimated, {
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
 import { useTheme } from '@/context/ThemeContext';
+import { usePreferences } from '@/context/PreferencesContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -49,45 +49,22 @@ type BetStatus = 'pending' | 'won' | 'lost' | 'void';
 
 // ── Platform data ──
 
-interface PlatformCategory { category: string; platforms: string[]; }
-
-const PLATFORM_DATA: PlatformCategory[] = [
-  { category: 'Classic DFS Platforms', platforms: ['DraftKings', 'FanDuel', 'Yahoo Fantasy / DFS', 'OwnersBox'] },
-  { category: "Pick'em / Player Prop DFS", platforms: ['PrizePicks', 'Underdog Fantasy', 'Sleeper Picks', 'DraftKings Pick6', 'FanDuel Fantasy', 'Betr Picks', 'Boom Fantasy', 'ParlayPlay', 'Dabble', 'Bleacher Nation Fantasy', 'Playsqor', 'Thrillzz', 'Rebet'] },
-  { category: 'Season-Long Fantasy', platforms: ['ESPN Fantasy', 'Yahoo Fantasy', 'Sleeper', 'NFL Fantasy', 'CBS Sports Fantasy'] },
-  { category: 'Other', platforms: ['Other'] },
-];
-
-type PlatformListItem = { type: 'category'; category: string } | { type: 'platform'; name: string };
-
-function buildPlatformItems(data: PlatformCategory[]): PlatformListItem[] {
-  const items: PlatformListItem[] = [];
-  for (const g of data) { items.push({ type: 'category', category: g.category }); for (const p of g.platforms) items.push({ type: 'platform', name: p }); }
-  return items;
-}
-
-function filterPlatforms(data: PlatformCategory[], query: string): PlatformListItem[] {
-  const q = query.toLowerCase().trim();
-  if (!q) return buildPlatformItems(data);
-  const items: PlatformListItem[] = [];
-  for (const g of data) { const m = g.platforms.filter((p) => p.toLowerCase().includes(q)); if (m.length > 0) { items.push({ type: 'category', category: g.category }); for (const p of m) items.push({ type: 'platform', name: p }); } }
-  return items;
-}
+const PLATFORMS = ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars', 'PrizePicks', 'Underdog', 'Kalshi', 'Other'];
 
 // ── Sport data ──
 
-const POPULAR_SPORTS = ['NFL', 'NBA', 'MLB', 'NHL', 'NCAAF', 'NCAAB', 'UFC / MMA', 'Soccer (All)', 'Tennis', 'Golf', 'Boxing', 'NASCAR', 'PGA Tour', 'Esports'];
+const POPULAR_SPORTS = ['NFL', 'NBA', 'MLB', 'NHL', 'NCAAF', 'NCAAB', 'Soccer', 'Tennis', 'Golf', 'MMA', 'Other'];
 
 interface SportCategory { category: string; sports: string[]; }
 const MORE_SPORTS_DATA: SportCategory[] = [
   { category: 'Soccer Leagues', sports: ['EPL', 'La Liga', 'Bundesliga', 'Serie A', 'Ligue 1', 'Champions League', 'Liga MX', 'MLS', 'World Cup'] },
   { category: 'College Sports', sports: ['NCAAW', 'College Baseball', 'College Hockey'] },
-  { category: 'Combat Sports', sports: ['Bellator', 'PFL'] },
-  { category: 'Motorsports', sports: ['Formula 1', 'IndyCar', 'MotoGP'] },
-  { category: 'Golf Events', sports: ['LIV Golf', 'LPGA', 'The Masters', 'US Open (Golf)', 'The Open Championship', 'Ryder Cup'] },
+  { category: 'Combat Sports', sports: ['UFC / MMA', 'Bellator', 'PFL', 'Boxing'] },
+  { category: 'Motorsports', sports: ['Formula 1', 'IndyCar', 'NASCAR', 'MotoGP'] },
+  { category: 'Golf Events', sports: ['PGA Tour', 'LIV Golf', 'LPGA', 'The Masters', 'US Open (Golf)'] },
   { category: 'Tennis Events', sports: ['Australian Open', 'French Open', 'Wimbledon', 'US Open (Tennis)'] },
-  { category: 'International Basketball', sports: ['WNBA', 'EuroLeague', 'FIBA World Cup'] },
-  { category: 'International Baseball', sports: ['NPB (Japan)', 'KBO (Korea)'] },
+  { category: 'Basketball', sports: ['WNBA', 'EuroLeague', 'FIBA World Cup'] },
+  { category: 'Baseball', sports: ['NPB (Japan)', 'KBO (Korea)'] },
   { category: 'Cricket', sports: ['IPL', 'T20 World Cup', 'The Ashes'] },
   { category: 'Rugby', sports: ['Rugby Union', 'Rugby World Cup', 'NRL'] },
   { category: 'Entertainment / Specials', sports: ['Politics / Elections', 'Award Shows', 'Reality TV', 'Novelty Props'] },
@@ -96,36 +73,6 @@ const MORE_SPORTS_DATA: SportCategory[] = [
 const ALL_SPORTS = [...POPULAR_SPORTS, ...MORE_SPORTS_DATA.flatMap((c) => c.sports)];
 
 // ── Payout calculation ──
-
-function calcPayout(wagerStr: string, oddsStr: string, format: OddsFormat): number {
-  const w = parseFloat(wagerStr);
-  if (!w || w <= 0 || !oddsStr.trim()) return 0;
-
-  if (format === 'american') {
-    const cleaned = oddsStr.trim().replace(/^\+/, '');
-    const odds = parseFloat(cleaned);
-    if (isNaN(odds) || odds === 0) return 0;
-    return odds > 0 ? w + w * (odds / 100) : w + w * (100 / Math.abs(odds));
-  }
-  if (format === 'decimal') {
-    const odds = parseFloat(oddsStr.trim());
-    if (isNaN(odds) || odds <= 0) return 0;
-    return w * odds;
-  }
-  if (format === 'fractional') {
-    const parts = oddsStr.trim().split('/');
-    if (parts.length !== 2) return 0;
-    const num = parseFloat(parts[0]);
-    const den = parseFloat(parts[1]);
-    if (isNaN(num) || isNaN(den) || den === 0) return 0;
-    return w + w * (num / den);
-  }
-  return 0;
-}
-
-function formatPayout(val: number): string {
-  return val > 0 ? val.toFixed(2) : '0.00';
-}
 
 function formatDateDisplay(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -158,18 +105,13 @@ function useBottomSheet() {
 // ── Status Pill Component ──
 
 function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, { toValue: 0.93, useNativeDriver: true, tension: 300, friction: 10 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 300, friction: 10 }).start();
-  };
+  const handlePressIn = () => Animated.spring(scaleAnim, { toValue: 0.93, useNativeDriver: true, tension: 300, friction: 10 }).start();
+  const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 300, friction: 10 }).start();
 
   const getStyles = () => {
-    if (!selected) return { bg: '#F0F0F0', text: '#1A1A1A', border: '#F0F0F0', bw: 0 };
+    if (!selected) return { bg: colors.input, text: colors.textSecondary, border: colors.border, bw: 1 };
     switch (value) {
       case 'pending': return { bg: 'transparent', text: '#2DC672', border: '#2DC672', bw: 1 };
       case 'won': return { bg: '#2DC672', text: '#FFFFFF', border: '#2DC672', bw: 0 };
@@ -179,11 +121,10 @@ function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: 
   };
 
   const s = getStyles();
-
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity
-        style={[{ borderRadius: 9, paddingHorizontal: 16, paddingVertical: 10, height: 38, justifyContent: 'center' }, { backgroundColor: s.bg, borderColor: s.border, borderWidth: s.bw }]}
+        style={[{ borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, height: 40, justifyContent: 'center' }, { backgroundColor: s.bg, borderColor: s.border, borderWidth: s.bw }]}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -214,6 +155,9 @@ export default function ManualAddBetScreen() {
 
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const { currency } = usePreferences();
+  const currencySymbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
 
   // Form state
   const [betType, setBetType] = useState<BetType>(() => {
@@ -273,7 +217,7 @@ export default function ManualAddBetScreen() {
       return;
     }
     let payout = 0;
-    if (oddsFormat === 'american' || oddsFormat === 'American') {
+    if (oddsFormat === 'american') {
       const oddsNum = parseFloat(oddsStr.replace('+', ''));
       if (isNaN(oddsNum) || oddsNum === 0) {
         setPotentialPayout('0.00');
@@ -284,14 +228,14 @@ export default function ManualAddBetScreen() {
       } else {
         payout = wagerNum + (wagerNum * (100 / Math.abs(oddsNum)));
       }
-    } else if (oddsFormat === 'decimal' || oddsFormat === 'Decimal') {
+    } else if (oddsFormat === 'decimal') {
       const oddsNum = parseFloat(oddsStr);
       if (isNaN(oddsNum) || oddsNum <= 0) {
         setPotentialPayout('0.00');
         return;
       }
       payout = wagerNum * oddsNum;
-    } else if (oddsFormat === 'fractional' || oddsFormat === 'Fractional') {
+    } else if (oddsFormat === 'fractional') {
       const parts = oddsStr.split('/');
       if (parts.length !== 2) {
         setPotentialPayout('0.00');
@@ -323,7 +267,6 @@ export default function ManualAddBetScreen() {
       setOddsFormat('american');
       setOdds(americanOdds);
     } else if (params.odds) {
-      // No payout to back-calculate from — fall back to AI-extracted odds
       setOdds(params.odds);
     }
   }, []);
@@ -364,11 +307,7 @@ export default function ManualAddBetScreen() {
 
   const handleOpenDatePicker = () => {
     setTempDate(placedAt || new Date());
-    if (Platform.OS === 'web') {
-      setShowDatePicker(true);
-    } else {
-      setShowDatePicker(true);
-    }
+    setShowDatePicker(true);
   };
 
   const handleConfirmWebDate = () => {
@@ -381,21 +320,16 @@ export default function ManualAddBetScreen() {
   const [confidence, setConfidence] = useState(() => params.confidence ? parseFloat(params.confidence) : null);
   const [showAiBanner, setShowAiBanner] = useState(hasRouteParams);
 
-  // Sportsbook state
+  // Platform state
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(params.sportsbook || null);
   const [isPlatformOther, setIsPlatformOther] = useState(false);
   const [customPlatform, setCustomPlatform] = useState('');
-  const [platformSearch, setPlatformSearch] = useState('');
-  const platformSheet = useBottomSheet();
 
-  const openPlatformSheet = () => { setPlatformSearch(''); platformSheet.openSheet(); };
   const handleSelectPlatform = (name: string) => {
     if (name === 'Other') { setSelectedPlatform(null); setIsPlatformOther(true); setCustomPlatform(''); }
     else { setSelectedPlatform(name); setIsPlatformOther(false); setCustomPlatform(''); }
-    platformSheet.closeSheet();
   };
   const handleClearPlatform = () => { setIsPlatformOther(false); setCustomPlatform(''); setSelectedPlatform(null); };
-  const filteredPlatformItems = filterPlatforms(PLATFORM_DATA, platformSearch);
 
   // Sport state
   const [selectedSport, setSelectedSport] = useState<string | null>(params.sport || null);
@@ -443,6 +377,7 @@ export default function ManualAddBetScreen() {
   const removeParlayLeg = (index: number) => {
     setParlayLegs(parlayLegs.filter((_, i) => i !== index));
   };
+
   const handleSaveBet = async () => {
     const finalStatus = status || 'pending';
     const sportsbook = isPlatformOther ? customPlatform : selectedPlatform;
@@ -492,7 +427,6 @@ export default function ManualAddBetScreen() {
         await supabase.from('bet_tags').insert(selectedTags.map(tag => ({ bet_id: data.id, tag })));
       }
 
-      // Save parlay legs if betType is parlay
       if (betType === 'parlay' && parlayLegs.length > 0 && data?.id) {
         try {
           await supabase.from('parlay_legs').insert(
@@ -516,18 +450,6 @@ export default function ManualAddBetScreen() {
       setIsSaving(false);
       Alert.alert('Error', 'Failed to save bet. Please try again.');
     }
-  };
-
-  // Platform sheet renderer
-  const renderPlatformItem = ({ item }: { item: PlatformListItem }) => {
-    if (item.type === 'category') return <View style={styles.categoryHeader}><Text style={styles.categoryText}>{item.category}</Text></View>;
-    const sel = (!isPlatformOther && selectedPlatform === item.name) || (isPlatformOther && item.name === 'Other');
-    return (
-      <TouchableOpacity style={styles.listRow} onPress={() => handleSelectPlatform(item.name)} activeOpacity={0.6}>
-        <Text style={styles.listRowText}>{item.name}</Text>
-        {sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}
-      </TouchableOpacity>
-    );
   };
 
   // Sport sheet content
@@ -578,21 +500,24 @@ export default function ManualAddBetScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style={colors.statusBar} />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Back Button */}
-        <FadeInView delay={0} direction="none">
-          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} scaleDown={0.9}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+        {/* ── Header ── */}
+        <View style={styles.header}>
+          <AnimatedPressable style={styles.backBtn} onPress={() => router.back()} scaleDown={0.9}>
             <Ionicons name="arrow-back" size={22} color={colors.text} />
           </AnimatedPressable>
-        </FadeInView>
+          <Text style={styles.headerTitle}>Add Bet</Text>
+          <View style={styles.headerSpacer} />
+        </View>
 
-        {/* AI Banner */}
+        {/* ── AI Banner ── */}
         {hasRouteParams && showAiBanner && (
           <View style={styles.banner}>
             <Ionicons name="sparkles" size={18} color="#6C63FF" />
-            <View style={styles.bannerTextWrap}>
+            <View style={styles.bannerBody}>
               <Text style={styles.bannerText}>AI-extracted — please review before saving</Text>
-              {confidence !== null && <Text style={styles.confidenceText}>Confidence: {Math.round(confidence * 100)}%</Text>}
+              {confidence !== null && <Text style={styles.confidenceText}>Confidence: {Math.round((confidence as number) * 100)}%</Text>}
             </View>
             <TouchableOpacity onPress={() => setShowAiBanner(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close" size={16} color="#6C63FF" />
@@ -600,125 +525,180 @@ export default function ManualAddBetScreen() {
           </View>
         )}
 
-        {/* Field 1 - Sportsbook */}
-        <FadeInView delay={60} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>Where did you place this bet?</Text>
-            {isPlatformOther ? (
-              <View style={styles.customInputContainer}>
-                <TextInput style={styles.customInput} placeholder="Type platform name..." placeholderTextColor={colors.placeholder} value={customPlatform} onChangeText={setCustomPlatform} />
-                <TouchableOpacity style={styles.clearButton} onPress={handleClearPlatform} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close" size={14} color={colors.textTertiary} /><Text style={styles.clearText}>Clear</Text>
+        {/* ── Card 1: Bet Info ── */}
+        <FadeInView delay={0} direction="bottom">
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>BET INFO</Text>
+
+            {/* Platform */}
+            <Text style={styles.fieldLabel}>Platform</Text>
+            <View style={styles.pillsWrap}>
+              {PLATFORMS.map((p) => {
+                const active = isPlatformOther ? p === 'Other' : selectedPlatform === p;
+                return (
+                  <TouchableOpacity key={p} style={[styles.pill, active && styles.pillActive]} onPress={() => handleSelectPlatform(p)} activeOpacity={0.7}>
+                    <Text style={[styles.pillText, active && styles.pillTextActive]}>{p}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {isPlatformOther && (
+              <View style={[styles.input, styles.inputRow, { marginTop: 10 }]}>
+                <TextInput
+                  style={styles.inlineInput}
+                  placeholder="Platform name..."
+                  placeholderTextColor={colors.placeholder}
+                  value={customPlatform}
+                  onChangeText={setCustomPlatform}
+                />
+                <TouchableOpacity onPress={handleClearPlatform} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
                 </TouchableOpacity>
               </View>
-            ) : (
-              <TouchableOpacity style={styles.dropdownInput} onPress={openPlatformSheet} activeOpacity={0.7}>
-                <Text style={[styles.dropdownValueText, !selectedPlatform && styles.dropdownPlaceholderText]}>{selectedPlatform || 'Select a platform...'}</Text>
-                <Ionicons name="chevron-down" size={18} color={colors.textTertiary} style={styles.dropdownIcon} />
-              </TouchableOpacity>
             )}
-          </View>
-        </FadeInView>
 
-        {/* Field 2 - Bet Type */}
-        <FadeInView delay={120} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>What type of bet?</Text>
-            <View style={styles.pillsContainer}>
-              {(['moneyline', 'spread', 'ou', 'parlay', 'prop', 'other'] as BetType[]).map((type) => (
-                <TouchableOpacity key={type} style={[styles.pill, betType === type && styles.pillActive]} onPress={() => setBetType(type)} activeOpacity={0.7}>
-                  <Text style={[styles.pillText, betType === type && styles.pillTextActive]}>
-                    {type === 'ou' ? 'O/U' : type.charAt(0).toUpperCase() + type.slice(1)}
+            <View style={styles.divider} />
+
+            {/* Bet Type */}
+            <Text style={styles.fieldLabel}>Bet Type</Text>
+            <View style={styles.pillsWrap}>
+              {(['moneyline', 'spread', 'ou', 'parlay', 'prop', 'other'] as BetType[]).map((t) => (
+                <TouchableOpacity key={t} style={[styles.pill, betType === t && styles.pillActive]} onPress={() => setBetType(t)} activeOpacity={0.7}>
+                  <Text style={[styles.pillText, betType === t && styles.pillTextActive]}>
+                    {t === 'ou' ? 'O/U' : t.charAt(0).toUpperCase() + t.slice(1)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-          </View>
-        </FadeInView>
 
-        {/* Field 3 - Sport */}
-        <FadeInView delay={180} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>What sport?</Text>
-            {isSportOther ? (
-              <View style={styles.customInputContainer}>
-                <TextInput style={styles.customInput} placeholder="Type sport name..." placeholderTextColor={colors.placeholder} value={customSport} onChangeText={setCustomSport} />
-                <TouchableOpacity style={styles.clearButton} onPress={handleClearSport} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close" size={14} color={colors.textTertiary} /><Text style={styles.clearText}>Clear</Text>
+            <View style={styles.divider} />
+
+            {/* Sport */}
+            <Text style={styles.fieldLabel}>Sport</Text>
+            <View style={styles.pillsWrap}>
+              {POPULAR_SPORTS.map((s) => {
+                const active = isSportOther ? s === 'Other' : selectedSport === s;
+                return (
+                  <TouchableOpacity key={s} style={[styles.pill, active && styles.pillActive]} onPress={() => handleSelectSport(s)} activeOpacity={0.7}>
+                    <Text style={[styles.pillText, active && styles.pillTextActive]}>{s}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity style={styles.pill} onPress={openSportSheet} activeOpacity={0.7}>
+                <Text style={styles.pillText}>More ›</Text>
+              </TouchableOpacity>
+            </View>
+            {isSportOther && (
+              <View style={[styles.input, styles.inputRow, { marginTop: 10 }]}>
+                <TextInput
+                  style={styles.inlineInput}
+                  placeholder="Sport name..."
+                  placeholderTextColor={colors.placeholder}
+                  value={customSport}
+                  onChangeText={setCustomSport}
+                />
+                <TouchableOpacity onPress={handleClearSport} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
                 </TouchableOpacity>
               </View>
-            ) : (
-              <TouchableOpacity style={styles.dropdownInput} onPress={openSportSheet} activeOpacity={0.7}>
-                <Text style={[styles.dropdownValueText, !selectedSport && styles.dropdownPlaceholderText]}>{selectedSport || 'Select a sport...'}</Text>
-                <Ionicons name="chevron-down" size={18} color={colors.textTertiary} style={styles.dropdownIcon} />
-              </TouchableOpacity>
             )}
+
+            <View style={styles.divider} />
+
+            {/* Matchup */}
+            <Text style={styles.fieldLabel}>Matchup</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., Lakers vs Warriors"
+              placeholderTextColor={colors.placeholder}
+              value={matchup}
+              onChangeText={setMatchup}
+            />
+
+            <View style={styles.divider} />
+
+            {/* Description */}
+            <Text style={styles.fieldLabel}>Description</Text>
+            <TextInput
+              style={[styles.input, styles.inputMultiline]}
+              placeholder="e.g., Lakers -5.5, Over 225.5"
+              placeholderTextColor={colors.placeholder}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              value={description}
+              onChangeText={setDescription}
+            />
           </View>
         </FadeInView>
 
-        {/* Field 4 - Matchup */}
-        <FadeInView delay={240} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>Who's playing? (Matchup/Event)</Text>
-            <TextInput style={styles.textInput} placeholder="e.g., Lakers vs Warriors" placeholderTextColor={colors.placeholder} value={matchup} onChangeText={setMatchup} />
-          </View>
-        </FadeInView>
+        {/* ── Card 2: Financials ── */}
+        <FadeInView delay={80} direction="bottom">
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>FINANCIALS</Text>
 
-        {/* Field 5 - Description */}
-        <FadeInView delay={300} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>Describe your bet</Text>
-            <TextInput style={[styles.textInput, styles.textareaInput]} placeholder="e.g., Lakers -5.5, Over 225.5" placeholderTextColor={colors.placeholder} multiline numberOfLines={3} textAlignVertical="top" value={description} onChangeText={setDescription} />
-          </View>
-        </FadeInView>
-
-        {/* Field 6 - Odds */}
-        <FadeInView delay={360} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>Odds</Text>
-            <View style={styles.oddsFormatContainer}>
-              {(['american', 'decimal', 'fractional'] as OddsFormat[]).map((fmt) => (
-                <TouchableOpacity key={fmt} style={[styles.oddsFormatPill, oddsFormat === fmt && styles.oddsFormatPillActive]} onPress={() => setOddsFormat(fmt)} activeOpacity={0.7}>
-                  <Text style={[styles.oddsFormatText, oddsFormat === fmt && styles.oddsFormatTextActive]}>{fmt.charAt(0).toUpperCase() + fmt.slice(1)}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput style={styles.textInput} placeholder={getOddsPlaceholder()} placeholderTextColor={colors.placeholder} value={odds} onChangeText={setOdds} />
-          </View>
-        </FadeInView>
-
-        {/* Field 7 - Wager */}
-        <FadeInView delay={420} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>How much did you wager?</Text>
-            <View style={styles.currencyInputContainer}>
-              <Text style={styles.currencySymbol}>$</Text>
-              <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor={colors.placeholder} keyboardType="decimal-pad" value={wager} onChangeText={setWager} />
-            </View>
-          </View>
-        </FadeInView>
-
-        {/* Field 8 - Potential Payout */}
-        <FadeInView delay={480} direction="bottom">
-          <View style={styles.formField}>
+            {/* Odds */}
             <View style={styles.labelRow}>
-              <Text style={styles.fieldLabel}>Potential Payout</Text>
-              <Text style={styles.labelHint}>(Auto-calculated)</Text>
+              <Text style={styles.fieldLabel}>Odds</Text>
+              <View style={styles.oddsFormatRow}>
+                {(['american', 'decimal', 'fractional'] as OddsFormat[]).map((fmt) => (
+                  <TouchableOpacity key={fmt} style={[styles.fmtPill, oddsFormat === fmt && styles.fmtPillActive]} onPress={() => setOddsFormat(fmt)} activeOpacity={0.7}>
+                    <Text style={[styles.fmtText, oddsFormat === fmt && styles.fmtTextActive]}>
+                      {fmt.charAt(0).toUpperCase() + fmt.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
+            <TextInput
+              style={styles.input}
+              placeholder={getOddsPlaceholder()}
+              placeholderTextColor={colors.placeholder}
+              value={odds}
+              onChangeText={setOdds}
+            />
+
+            <View style={styles.divider} />
+
+            {/* Wager */}
+            <Text style={styles.fieldLabel}>Wager</Text>
+            <View style={[styles.input, styles.inputRow]}>
+              <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+              <TextInput
+                style={styles.inlineInput}
+                placeholder="0.00"
+                placeholderTextColor={colors.placeholder}
+                keyboardType="decimal-pad"
+                value={wager}
+                onChangeText={setWager}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Potential Payout */}
+            <Text style={styles.fieldLabel}>
+              Potential Payout{'  '}
+              <Text style={styles.hintText}>(auto-calculated)</Text>
+            </Text>
             <RAnimated.View style={payoutStyle}>
-              <View style={[styles.currencyInputContainer, styles.readOnlyInput]}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput style={styles.currencyInput} placeholder="0.00" placeholderTextColor={colors.placeholder} editable={false} value={potentialPayout} />
+              <View style={[styles.input, styles.inputRow, styles.readOnly]}>
+                <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                <TextInput
+                  style={styles.inlineInput}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.placeholder}
+                  editable={false}
+                  value={potentialPayout}
+                />
               </View>
             </RAnimated.View>
-          </View>
-        </FadeInView>
 
-        {/* Field 9 - Status */}
-        <FadeInView delay={540} direction="bottom">
-          <View style={styles.formField}>
+            <View style={styles.divider} />
+
+            {/* Status */}
             <Text style={styles.fieldLabel}>Status</Text>
-            <View style={styles.statusContainer}>
+            <View style={styles.statusRow}>
               {(['pending', 'won', 'lost', 'void'] as BetStatus[]).map((s) => (
                 <StatusPill key={s} value={s} selected={status === s} onPress={() => setStatus(s)} />
               ))}
@@ -726,13 +706,16 @@ export default function ManualAddBetScreen() {
           </View>
         </FadeInView>
 
-        {/* Field 10 - Date */}
-        <FadeInView delay={600} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>When was this bet placed?</Text>
-            <TouchableOpacity style={styles.dropdownInput} onPress={handleOpenDatePicker} activeOpacity={0.7}>
+        {/* ── Card 3: Details ── */}
+        <FadeInView delay={160} direction="bottom">
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>DETAILS</Text>
+
+            {/* Date */}
+            <Text style={styles.fieldLabel}>Date Placed</Text>
+            <TouchableOpacity style={[styles.input, styles.inputRow]} onPress={handleOpenDatePicker} activeOpacity={0.7}>
               <Ionicons name="calendar-outline" size={18} color={colors.textTertiary} style={{ marginRight: 10 }} />
-              <Text style={[styles.dropdownValueText, !placedAt && styles.dropdownPlaceholderText]}>
+              <Text style={[styles.inputRowText, !placedAt && { color: colors.placeholder }]}>
                 {placedAt ? formatDateDisplay(placedAt) : 'Select date and time'}
               </Text>
             </TouchableOpacity>
@@ -778,7 +761,7 @@ export default function ManualAddBetScreen() {
                             placeholderTextColor={colors.placeholder}
                           />
                         </View>
-                        <View style={styles.webButtonRow}>
+                        <View style={styles.webBtnRow}>
                           <TouchableOpacity style={styles.webCancelBtn} onPress={() => setShowDatePicker(false)}>
                             <Text style={styles.webCancelText}>Cancel</Text>
                           </TouchableOpacity>
@@ -793,112 +776,126 @@ export default function ManualAddBetScreen() {
               </Modal>
             )}
 
-            {/* Native date picker */}
+            {/* Native date pickers */}
             {Platform.OS !== 'web' && showDatePicker && (
               <DateTimePicker value={tempDate} mode="date" display="default" onChange={handleDateChange} minimumDate={minDate} maximumDate={maxDate} />
             )}
             {Platform.OS !== 'web' && showTimePicker && (
               <DateTimePicker value={tempDate} mode="time" display="default" onChange={handleTimeChange} />
             )}
-          </View>
-        </FadeInView>
 
-        {/* Field 10B - Parlay Legs (only if bet_type === 'parlay') */}
-        {betType === 'parlay' && (
-          <FadeInView delay={660} direction="bottom">
-            <View style={styles.formField}>
-              <View style={styles.parlayHeaderRow}>
-                <Text style={styles.fieldLabel}>Parlay Legs</Text>
-                <View style={styles.parlayCountBadge}>
-                  <Text style={styles.parlayCountText}>{parlayLegs.length}</Text>
-                </View>
-              </View>
-
-              {parlayLegs.map((leg, index) => (
-                <View key={index} style={styles.parlayLegCard}>
-                  <View style={styles.parlayLegContent}>
-                    <TextInput
-                      style={[styles.textInput, styles.parlayLegInput]}
-                      placeholder="e.g. Lakers ML"
-                      placeholderTextColor={colors.placeholder}
-                      value={leg.description}
-                      onChangeText={(val) => updateParlayLeg(index, 'description', val)}
-                    />
-                    <TextInput
-                      style={[styles.textInput, styles.parlayLegInput]}
-                      placeholder="e.g. +120"
-                      placeholderTextColor={colors.placeholder}
-                      value={leg.odds}
-                      onChangeText={(val) => updateParlayLeg(index, 'odds', val)}
-                    />
-
-                    <View style={styles.parlayLegStatusRow}>
-                      {(['pending', 'won', 'lost'] as BetStatus[]).map((s) => {
-                        if (s === 'void') return null;
-                        const isSelected = leg.status === s;
-                        return (
-                          <TouchableOpacity
-                            key={s}
-                            style={[
-                              styles.parlayStatusPill,
-                              isSelected && (s === 'won' ? styles.parlayStatusWon : s === 'lost' ? styles.parlayStatusLost : styles.parlayStatusPending),
-                            ]}
-                            onPress={() => updateParlayLeg(index, 'status', s)}
-                            activeOpacity={0.7}
-                          >
-                            <Text
-                              style={[
-                                styles.parlayStatusText,
-                                isSelected && styles.parlayStatusTextActive,
-                              ]}
-                            >
-                              {s.charAt(0).toUpperCase() + s.slice(1)}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+            {/* Parlay Legs */}
+            {betType === 'parlay' && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.parlayHeader}>
+                  <Text style={styles.fieldLabel}>Parlay Legs</Text>
+                  <View style={styles.parlayBadge}>
+                    <Text style={styles.parlayBadgeText}>{parlayLegs.length}</Text>
                   </View>
-
-                  <TouchableOpacity
-                    style={styles.parlayDeleteBtn}
-                    onPress={() => removeParlayLeg(index)}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="close" size={18} color="#E85D5D" />
-                  </TouchableOpacity>
                 </View>
+
+                {parlayLegs.map((leg, index) => (
+                  <View key={index} style={styles.legCard}>
+                    <View style={{ flex: 1 }}>
+                      <TextInput
+                        style={[styles.input, styles.legInput]}
+                        placeholder="e.g. Lakers ML"
+                        placeholderTextColor={colors.placeholder}
+                        value={leg.description}
+                        onChangeText={(val) => updateParlayLeg(index, 'description', val)}
+                      />
+                      <TextInput
+                        style={[styles.input, styles.legInput]}
+                        placeholder="e.g. +120"
+                        placeholderTextColor={colors.placeholder}
+                        value={leg.odds}
+                        onChangeText={(val) => updateParlayLeg(index, 'odds', val)}
+                      />
+                      <View style={styles.legStatusRow}>
+                        {(['pending', 'won', 'lost'] as BetStatus[]).map((s) => {
+                          const isSelected = leg.status === s;
+                          return (
+                            <TouchableOpacity
+                              key={s}
+                              style={[
+                                styles.legStatusPill,
+                                isSelected && (s === 'won' ? styles.legStatusWon : s === 'lost' ? styles.legStatusLost : styles.legStatusPending),
+                              ]}
+                              onPress={() => updateParlayLeg(index, 'status', s)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.legStatusText, isSelected && styles.legStatusTextActive]}>
+                                {s.charAt(0).toUpperCase() + s.slice(1)}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.legDeleteBtn}
+                      onPress={() => removeParlayLeg(index)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close" size={18} color="#E85D5D" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                <TouchableOpacity style={styles.addLegBtn} onPress={addParlayLeg} activeOpacity={0.7}>
+                  <Ionicons name="add-circle-outline" size={18} color="#6366F1" />
+                  <Text style={styles.addLegText}>Add Leg</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <View style={styles.divider} />
+
+            {/* Notes */}
+            <Text style={styles.fieldLabel}>
+              Notes{'  '}<Text style={styles.hintText}>(optional)</Text>
+            </Text>
+            <TextInput
+              style={[styles.input, styles.inputMultilineLarge]}
+              placeholder="Why did you make this bet?"
+              placeholderTextColor={colors.placeholder}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              value={notes}
+              onChangeText={setNotes}
+            />
+
+            <View style={styles.divider} />
+
+            {/* Tags */}
+            <Text style={styles.fieldLabel}>
+              Tags{'  '}<Text style={styles.hintText}>(optional)</Text>
+            </Text>
+            <View style={styles.pillsWrap}>
+              {['Underdog Bet', 'Live Bet', 'Research-Based', 'High Confidence', 'Hedge Bet', 'System Play'].map((tag) => (
+                <TouchableOpacity key={tag} style={[styles.pill, selectedTags.includes(tag) && styles.pillActive]} onPress={() => toggleTag(tag)} activeOpacity={0.7}>
+                  <Text style={[styles.pillText, selectedTags.includes(tag) && styles.pillTextActive]}>{tag}</Text>
+                </TouchableOpacity>
               ))}
-
-              <TouchableOpacity style={styles.addLegButton} onPress={addParlayLeg} activeOpacity={0.7}>
-                <Ionicons name="add-circle-outline" size={18} color="#6366F1" />
-                <Text style={styles.addLegText}>Add Leg</Text>
-              </TouchableOpacity>
             </View>
-          </FadeInView>
-        )}
 
-        {/* Field 11 - Notes */}
-        <FadeInView delay={720} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>Notes (Optional)</Text>
-            <TextInput style={[styles.textInput, styles.textareaInputLarge]} placeholder="Why did you make this bet?" placeholderTextColor={colors.placeholder} multiline numberOfLines={4} textAlignVertical="top" value={notes} onChangeText={setNotes} />
-          </View>
-        </FadeInView>
+            <View style={styles.divider} />
 
-        {/* Field 12 - Upload Screenshot */}
-        <FadeInView delay={780} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>Upload Ticket Screenshot (Optional)</Text>
+            {/* Upload */}
+            <Text style={styles.fieldLabel}>
+              Ticket Screenshot{'  '}<Text style={styles.hintText}>(optional)</Text>
+            </Text>
             {ticketImageUrl ? (
-              <View style={styles.imagePreviewWrap}>
+              <View style={styles.imageWrap}>
                 <Image source={{ uri: ticketImageUrl }} style={styles.imagePreview} resizeMode="cover" />
                 <TouchableOpacity style={styles.imageRemoveBtn} onPress={() => setTicketImageUrl('')} activeOpacity={0.7}>
                   <Ionicons name="close" size={14} color="#FFFFFF" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.retakeBtn} activeOpacity={0.7} onPress={() => setTicketImageUrl('')}>
-                  <Text style={styles.retakeText}>Retake / Re-upload</Text>
+                <TouchableOpacity style={styles.retakeBtn} onPress={() => setTicketImageUrl('')} activeOpacity={0.7}>
+                  <Text style={styles.retakeText}>Remove / Re-upload</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -908,72 +905,59 @@ export default function ManualAddBetScreen() {
                   <Text style={styles.uploadTitle}>Choose Photo or Take Photo</Text>
                   <Text style={styles.uploadHint}>PNG, JPG up to 10MB</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.takePhotoButton} activeOpacity={0.7}>
-                  <Ionicons name="camera-outline" size={18} color="#4A4A4A" style={styles.takePhotoIcon} />
-                  <Text style={styles.takePhotoText}>Take Photo</Text>
+                <TouchableOpacity style={[styles.input, styles.inputRow, { marginTop: 10 }]} activeOpacity={0.7}>
+                  <Ionicons name="camera-outline" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                  <Text style={styles.inputRowText}>Take Photo</Text>
                 </TouchableOpacity>
               </>
             )}
           </View>
         </FadeInView>
 
-        {/* Field 13 - Tags */}
-        <FadeInView delay={840} direction="bottom">
-          <View style={styles.formField}>
-            <Text style={styles.fieldLabel}>Tags (Optional)</Text>
-            <View style={styles.tagsContainer}>
-              {['Underdog Bet', 'Live Bet', 'Research-Based', 'High Confidence', 'Hedge Bet', 'System Play'].map((tag) => (
-                <TouchableOpacity key={tag} style={[styles.tag, selectedTags.includes(tag) && styles.tagSelected]} onPress={() => toggleTag(tag)} activeOpacity={0.7}>
-                  <Text style={[styles.tagText, selectedTags.includes(tag) && styles.tagTextSelected]}>{tag}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </FadeInView>
-
-        {/* Submit Button */}
-        <FadeInView delay={900} direction="bottom">
+        {/* ── Save Button ── */}
+        <FadeInView delay={240} direction="bottom">
           <AnimatedPressable
-            style={[styles.submitButton, isSaving && { opacity: 0.7 }]}
+            style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
             onPress={handleSaveBet}
             disabled={isSaving}
             scaleDown={0.98}
           >
             {isSaving ? (
-              <ActivityIndicator color={colors.buttonPrimaryText} />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.submitButtonText}>Save Bet</Text>
+              <Text style={styles.saveBtnText}>Save Bet</Text>
             )}
           </AnimatedPressable>
         </FadeInView>
+
       </ScrollView>
 
-      {/* Platform Bottom Sheet */}
-      <Modal visible={platformSheet.visible} transparent animationType="none" onRequestClose={platformSheet.closeSheet}>
-        <View style={styles.modalContainer}>
-          <TouchableWithoutFeedback onPress={platformSheet.closeSheet}><Animated.View style={[styles.sheetOverlay, { opacity: platformSheet.overlayAnim }]} /></TouchableWithoutFeedback>
-          <Animated.View style={[styles.sheet, { transform: [{ translateY: platformSheet.slideAnim }] }]}>
-            <View style={styles.handleArea} {...platformSheet.panResponder.panHandlers}><View style={styles.handle} /></View>
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={18} color={colors.textTertiary} style={styles.searchIcon} />
-              <TextInput style={styles.searchInput} placeholder="Search platforms..." placeholderTextColor={colors.placeholder} value={platformSearch} onChangeText={setPlatformSearch} autoCorrect={false} autoCapitalize="none" />
-              {platformSearch.length > 0 && <TouchableOpacity onPress={() => setPlatformSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close-circle" size={18} color="#C0C0C0" /></TouchableOpacity>}
-            </View>
-            <FlatList data={filteredPlatformItems} renderItem={renderPlatformItem} keyExtractor={(item, i) => item.type === 'category' ? `pcat-${item.category}` : `pplat-${(item as any).name}-${i}`} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} ListEmptyComponent={<View style={styles.emptyContainer}><Text style={styles.emptyText}>No platforms found</Text></View>} />
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {/* Sport Bottom Sheet */}
+      {/* ── Sport Bottom Sheet ── */}
       <Modal visible={sportSheet.visible} transparent animationType="none" onRequestClose={sportSheet.closeSheet}>
         <View style={styles.modalContainer}>
-          <TouchableWithoutFeedback onPress={sportSheet.closeSheet}><Animated.View style={[styles.sheetOverlay, { opacity: sportSheet.overlayAnim }]} /></TouchableWithoutFeedback>
+          <TouchableWithoutFeedback onPress={sportSheet.closeSheet}>
+            <Animated.View style={[styles.sheetOverlay, { opacity: sportSheet.overlayAnim }]} />
+          </TouchableWithoutFeedback>
           <Animated.View style={[styles.sheet, { transform: [{ translateY: sportSheet.slideAnim }] }]}>
-            <View style={styles.handleArea} {...sportSheet.panResponder.panHandlers}><View style={styles.handle} /></View>
+            <View style={styles.handleArea} {...sportSheet.panResponder.panHandlers}>
+              <View style={styles.handle} />
+            </View>
             <View style={styles.searchContainer}>
               <Ionicons name="search" size={18} color={colors.textTertiary} style={styles.searchIcon} />
-              <TextInput style={styles.searchInput} placeholder="Search sports..." placeholderTextColor={colors.placeholder} value={sportSearch} onChangeText={setSportSearch} autoCorrect={false} autoCapitalize="none" />
-              {sportSearch.length > 0 && <TouchableOpacity onPress={() => setSportSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close-circle" size={18} color="#C0C0C0" /></TouchableOpacity>}
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search sports..."
+                placeholderTextColor={colors.placeholder}
+                value={sportSearch}
+                onChangeText={setSportSearch}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {sportSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setSportSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={18} color="#C0C0C0" />
+                </TouchableOpacity>
+              )}
             </View>
             {renderSportSheetContent()}
           </Animated.View>
@@ -983,52 +967,111 @@ export default function ManualAddBetScreen() {
   );
 }
 
-// ── Unified createStyles ──
+// ── Styles ──
 
 function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext').useTheme>['colors']) {
   return StyleSheet.create({
-    // ── AI styles ──
-    banner: { backgroundColor: '#F0EEFF', borderRadius: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, marginBottom: 20, gap: 10 },
-    bannerTextWrap: { flex: 1 },
+    // Layout
+    container: { flex: 1, backgroundColor: colors.background },
+    scroll: { flex: 1 },
+    scrollContent: { paddingBottom: 48 },
+
+    // Header
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20 },
+    backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: colors.text },
+    headerSpacer: { width: 40 },
+
+    // AI Banner
+    banner: { backgroundColor: '#F0EEFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, marginHorizontal: 20, marginBottom: 16, gap: 10 },
+    bannerBody: { flex: 1 },
     bannerText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
-    confidenceText: { fontSize: 12, fontWeight: '400', color: colors.textTertiary, marginTop: 2 },
-    payoutNote: { fontSize: 12, fontWeight: '400', color: '#6C63FF', marginTop: 6 },
-    imagePreviewWrap: { position: 'relative', marginBottom: 12 },
-    imagePreview: { width: '100%', height: 120, borderRadius: 10, backgroundColor: colors.dividerLine },
+    confidenceText: { fontSize: 12, fontWeight: '400', color: '#9B8FE0', marginTop: 2 },
+
+    // Cards
+    card: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, marginHorizontal: 20, marginBottom: 16 },
+    cardTitle: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 20 },
+    divider: { height: 1, backgroundColor: colors.dividerLine, marginVertical: 16 },
+
+    // Field labels
+    fieldLabel: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 10 },
+    hintText: { fontSize: 12, fontWeight: '400', color: colors.textTertiary },
+    labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+
+    // Inputs
+    input: { backgroundColor: colors.input, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, fontSize: 15, color: colors.inputText, height: 50 },
+    inputMultiline: { height: 88, paddingTop: 14, paddingVertical: 0 },
+    inputMultilineLarge: { height: 108, paddingTop: 14, paddingVertical: 0 },
+    inputRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 0 },
+    inputRowText: { flex: 1, fontSize: 15, color: colors.inputText },
+    inlineInput: { flex: 1, fontSize: 15, color: colors.inputText, height: 50 },
+    readOnly: { backgroundColor: colors.chipBg },
+
+    // Currency
+    currencySymbol: { fontSize: 16, fontWeight: '600', color: colors.textSecondary, marginRight: 4 },
+
+    // Pills (bet type, platform, sport, tags)
+    pillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    pill: { borderRadius: 20, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: 'transparent' },
+    pillActive: { backgroundColor: colors.buttonPrimary, borderColor: colors.buttonPrimary },
+    pillText: { fontSize: 13, fontWeight: '600', color: colors.text },
+    pillTextActive: { color: '#FFFFFF' },
+
+    // Odds format toggle
+    oddsFormatRow: { flexDirection: 'row', gap: 4 },
+    fmtPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+    fmtPillActive: { backgroundColor: colors.buttonPrimary },
+    fmtText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+    fmtTextActive: { color: '#FFFFFF' },
+
+    // Status
+    statusRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+
+    // Save button
+    saveBtn: { backgroundColor: colors.buttonPrimary, borderRadius: 14, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', marginHorizontal: 20, marginTop: 4 },
+    saveBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+
+    // Parlay
+    parlayHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+    parlayBadge: { backgroundColor: '#6C63FF', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+    parlayBadgeText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
+    legCard: { backgroundColor: colors.background, borderRadius: 12, padding: 12, marginBottom: 10, flexDirection: 'row', gap: 10 },
+    legInput: { height: 44, marginBottom: 8 },
+    legStatusRow: { flexDirection: 'row', gap: 6 },
+    legStatusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: 'transparent' },
+    legStatusPending: { borderColor: '#2DC672' },
+    legStatusWon: { backgroundColor: '#2DC672', borderColor: '#2DC672' },
+    legStatusLost: { backgroundColor: '#E85D5D', borderColor: '#E85D5D' },
+    legStatusText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+    legStatusTextActive: { color: '#FFFFFF' },
+    legDeleteBtn: { padding: 4, marginTop: 2 },
+    addLegBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#6366F1', borderStyle: 'dashed' },
+    addLegText: { fontSize: 14, fontWeight: '600', color: '#6366F1' },
+
+    // Image
+    imageWrap: { position: 'relative', marginBottom: 4 },
+    imagePreview: { width: '100%', height: 120, borderRadius: 12, backgroundColor: colors.dividerLine },
     imageRemoveBtn: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
     retakeBtn: { alignItems: 'center', paddingVertical: 10 },
     retakeText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
-    parlayHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-    parlayCountBadge: { backgroundColor: '#6C63FF', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
-    parlayCountText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
-    parlayLegCard: { backgroundColor: colors.input, borderRadius: 10, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-    parlayLegContent: { flex: 1 },
-    parlayLegInput: { marginBottom: 8 },
-    parlayLegStatusRow: { flexDirection: 'row', gap: 6 },
-    parlayStatusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: colors.border, borderWidth: 1, borderColor: colors.border },
-    parlayStatusPending: { backgroundColor: 'transparent', borderColor: '#2DC672' },
-    parlayStatusWon: { backgroundColor: '#2DC672', borderColor: '#2DC672' },
-    parlayStatusLost: { backgroundColor: '#E85D5D', borderColor: '#E85D5D' },
-    parlayStatusText: { fontSize: 12, fontWeight: '600', color: '#4A4A4A' },
-    parlayStatusTextActive: { color: '#FFFFFF' },
-    parlayDeleteBtn: { padding: 4 },
-    addLegButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#6366F1', borderStyle: 'dashed' },
-    addLegText: { fontSize: 14, fontWeight: '600', color: '#6366F1' },
+    uploadArea: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', paddingVertical: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.input },
+    uploadTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginTop: 8 },
+    uploadHint: { fontSize: 12, color: colors.textTertiary, marginTop: 4 },
 
-    // ── Date picker styles ──
+    // Date picker (web)
     dateOverlay: { flex: 1, backgroundColor: '#00000066', justifyContent: 'center', alignItems: 'center' },
     webPickerCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 24, width: 320 },
     webPickerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 20, textAlign: 'center' },
     webInputRow: { marginBottom: 16 },
-    webLabel: { fontSize: 13, fontWeight: '600', color: '#4A4A4A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+    webLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
     webInput: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: colors.inputText, height: 46 },
-    webButtonRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+    webBtnRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
     webCancelBtn: { flex: 1, backgroundColor: colors.input, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-    webCancelText: { fontSize: 15, fontWeight: '600', color: '#4A4A4A' },
+    webCancelText: { fontSize: 15, fontWeight: '600', color: colors.text },
     webConfirmBtn: { flex: 1, backgroundColor: '#10B981', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
     webConfirmText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
 
-    // ── Shared bottom sheet styles ──
+    // Bottom sheet
     modalContainer: { flex: 1, justifyContent: 'flex-end' },
     sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#00000066' },
     sheet: { height: SHEET_HEIGHT, backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
@@ -1044,8 +1087,6 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     listRowText: { fontSize: 15, fontWeight: '400', color: colors.text, flex: 1 },
     emptyContainer: { paddingTop: 40, alignItems: 'center' },
     emptyText: { fontSize: 15, color: colors.textTertiary },
-
-    // ── Sport-specific styles ──
     chipsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10, marginBottom: 8 },
     chip: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, height: 42, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', minWidth: '45%' as any, flexGrow: 1, flexBasis: '45%' as any },
     chipSelected: { backgroundColor: '#10B981' },
@@ -1054,57 +1095,5 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     moreSportsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, marginTop: 8, borderTopWidth: 1, borderTopColor: colors.input },
     moreSportsTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
     moreSportsContent: { paddingBottom: 20 },
-
-    // ── Form styles ──
-    container: { flex: 1, backgroundColor: colors.background },
-    scrollView: { flex: 1 },
-    scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 },
-    backButton: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-    formField: { marginBottom: 22 },
-    fieldLabel: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 10 },
-    labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-    labelHint: { fontSize: 13, fontWeight: '400', color: colors.textTertiary, marginLeft: 6 },
-    textInput: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, fontSize: 14, fontWeight: '400', color: colors.inputText, height: 50 },
-    textareaInput: { height: 90, paddingTop: 14 },
-    textareaInputLarge: { height: 110, paddingTop: 14 },
-    dropdownInput: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, height: 50, justifyContent: 'center', flexDirection: 'row', alignItems: 'center' },
-    dropdownValueText: { flex: 1, fontSize: 14, fontWeight: '400', color: colors.inputText },
-    dropdownPlaceholderText: { color: colors.placeholder },
-    dropdownIcon: { marginLeft: 8 },
-    dateInputPlaceholder: { flex: 1 },
-    customInputContainer: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, height: 50, flexDirection: 'row', alignItems: 'center' },
-    customInput: { flex: 1, fontSize: 14, fontWeight: '400', color: colors.inputText, height: 50 },
-    clearButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8 },
-    clearText: { fontSize: 13, fontWeight: '500', color: colors.textTertiary },
-    pillsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    pill: { backgroundColor: colors.surface, borderWidth: 1, borderColor: '#D0D0D0', borderRadius: 9, paddingHorizontal: 18, paddingVertical: 10, height: 38, justifyContent: 'center' },
-    pillActive: { backgroundColor: '#10B981', borderColor: '#10B981' },
-    pillText: { fontSize: 14, fontWeight: '600', color: colors.text },
-    pillTextActive: { color: '#FFFFFF' },
-    oddsFormatContainer: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-    oddsFormatPill: { paddingHorizontal: 16, paddingVertical: 8, height: 32, justifyContent: 'center' },
-    oddsFormatPillActive: { backgroundColor: colors.buttonPrimary, borderRadius: 6 },
-    oddsFormatText: { fontSize: 13, fontWeight: '600', color: colors.text },
-    oddsFormatTextActive: { color: colors.buttonPrimaryText },
-    currencyInputContainer: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, height: 50, flexDirection: 'row', alignItems: 'center' },
-    readOnlyInput: { backgroundColor: colors.inputBorder },
-    currencySymbol: { fontSize: 16, fontWeight: '600', color: colors.inputText, marginRight: 8 },
-    currencyInput: { flex: 1, fontSize: 14, fontWeight: '400', color: colors.inputText },
-    statusContainer: { flexDirection: 'row', gap: 10 },
-    statusPill: { borderRadius: 9, paddingHorizontal: 16, paddingVertical: 10, height: 38, justifyContent: 'center' },
-    statusPillText: { fontSize: 14, fontWeight: '600' },
-    uploadArea: { backgroundColor: colors.input, borderRadius: 10, borderWidth: 1, borderColor: colors.dividerLine, borderStyle: 'dashed', paddingVertical: 30, alignItems: 'center', justifyContent: 'center', height: 130, marginBottom: 12 },
-    uploadTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginTop: 10 },
-    uploadHint: { fontSize: 12, fontWeight: '400', color: colors.textTertiary, marginTop: 4 },
-    takePhotoButton: { backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 46 },
-    takePhotoIcon: { marginRight: 8 },
-    takePhotoText: { fontSize: 14, fontWeight: '500', color: colors.text },
-    tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    tag: { backgroundColor: colors.input, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 8, height: 34, justifyContent: 'center' },
-    tagSelected: { backgroundColor: colors.dividerLine, borderWidth: 1, borderColor: colors.textTertiary },
-    tagText: { fontSize: 13, fontWeight: '500', color: '#4A4A4A' },
-    tagTextSelected: { color: colors.text, fontWeight: '600' },
-    submitButton: { backgroundColor: colors.buttonPrimary, borderRadius: 12, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', height: 54, marginTop: 10 },
-    submitButtonText: { fontSize: 16, fontWeight: '700', color: colors.buttonPrimaryText },
   });
 }
