@@ -50,7 +50,7 @@ type BetStatus = 'pending' | 'won' | 'lost' | 'void';
 
 // ── Platform data ──
 
-const PLATFORMS = ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars', 'PrizePicks', 'Underdog', 'Kalshi', 'Other'];
+const PLATFORMS = ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars', 'PrizePicks', 'Underdog', 'Kalshi', 'Polymarket', 'Robinhood', 'Other'];
 
 // ── Sport data ──
 

@@ -95,7 +95,7 @@ serve(async (req) => {
 
 Return this exact JSON structure:
 {
-  "sportsbook": "platform name (DraftKings, FanDuel, PrizePicks, Underdog Fantasy, BetMGM, Caesars, Kalshi, etc.)",
+  "sportsbook": "platform name (DraftKings, FanDuel, PrizePicks, Underdog Fantasy, BetMGM, Caesars, Kalshi, Polymarket, Robinhood, etc.)",
   "bet_type": "moneyline | spread | over_under | parlay | prop | other",
   "sport": "sport name (NFL, NBA, MLB, NHL, etc.)",
   "matchup": "teams or event",
