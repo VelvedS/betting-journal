@@ -6,7 +6,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
-import { formatCompactCurrency, formatPercent, formatWholeNumber } from '@/lib/formatters';
+import { getCurrencySymbol } from '@/lib/formatters';
+import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
@@ -15,6 +16,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { signOut, user } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
+  const { currency, showBalance } = usePreferences();
+  const currencySymbol = getCurrencySymbol(currency);
   const [totalBets, setTotalBets] = useState<number | null>(null);
   const [winRate, setWinRate] = useState<number | null>(null);
   const [profit, setProfit] = useState<number | null>(null);
@@ -160,14 +163,16 @@ export default function ProfileScreen() {
               <View style={styles.statColumn}>
                 {loading ? (
                   <Text style={[styles.statValue, { color: profitColor }]}>—</Text>
-                ) : (
+                ) : showBalance ? (
                   <AnimatedNumber
                     value={Math.abs(profit || 0)}
-                    prefix={profit !== null && profit < 0 ? '-$' : '$'}
+                    prefix={profit !== null && profit < 0 ? `-${currencySymbol}` : currencySymbol}
                     decimals={0}
                     delay={280}
                     style={[styles.statValue, { color: profitColor }]}
                   />
+                ) : (
+                  <Text style={[styles.statValue, { color: profitColor }]}>••••</Text>
                 )}
                 <Text style={styles.statLabel}>PROFIT</Text>
               </View>

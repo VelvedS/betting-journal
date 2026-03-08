@@ -42,6 +42,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
+import { formatROI, getCurrencySymbol } from '@/lib/formatters';
+import { usePreferences } from '@/context/PreferencesContext';
 
 // ──────────────────────────────────────
 // Types
@@ -390,12 +392,12 @@ function buildBreakdown(bets: Bet[], key: 'bet_type' | 'sport'): BreakdownRow[] 
     .sort((a, b) => b.roi - a.roi);
 }
 
-function buildBetSizeRanges(bets: Bet[]): BetSizeRange[] {
+function buildBetSizeRanges(bets: Bet[], sym: string = '$'): BetSizeRange[] {
   const ranges: { label: string; min: number; max: number }[] = [
-    { label: '$0 – $25', min: 0, max: 25 },
-    { label: '$25 – $50', min: 25, max: 50 },
-    { label: '$50 – $100', min: 50, max: 100 },
-    { label: '$100+', min: 100, max: Infinity },
+    { label: `${sym}0 – ${sym}25`, min: 0, max: 25 },
+    { label: `${sym}25 – ${sym}50`, min: 25, max: 50 },
+    { label: `${sym}50 – ${sym}100`, min: 50, max: 100 },
+    { label: `${sym}100+`, min: 100, max: Infinity },
   ];
 
   return ranges.map(({ label, min, max }) => {
@@ -518,6 +520,8 @@ export default function EdgeScreen() {
   const { user } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { currency } = usePreferences();
+  const currencySymbol = getCurrencySymbol(currency);
 
   const [activeTab, setActiveTab] = useState<TabKey>('Insights');
   const [bets, setBets] = useState<Bet[]>([]);
@@ -587,7 +591,7 @@ export default function EdgeScreen() {
   const overallROI = useMemo(() => calcOverallROI(bets), [bets]);
   const betTypeBreakdown = useMemo(() => buildBreakdown(bets, 'bet_type'), [bets]);
   const sportBreakdown = useMemo(() => buildBreakdown(bets, 'sport'), [bets]);
-  const betSizeRanges = useMemo(() => buildBetSizeRanges(bets), [bets]);
+  const betSizeRanges = useMemo(() => buildBetSizeRanges(bets, currencySymbol), [bets, currencySymbol]);
   const dayOfWeek = useMemo(() => buildDayOfWeek(bets), [bets]);
 
   // Best bet size range (highest win rate with at least a few bets)
@@ -750,8 +754,7 @@ export default function EdgeScreen() {
                             { color: row.roi >= 0 ? GREEN : RED },
                           ]}
                         >
-                          {row.roi >= 0 ? '+' : ''}
-                          {row.roi.toFixed(0)}% ROI
+                          {formatROI(row.roi)} ROI
                         </Text>
                       </View>
                     </View>
@@ -801,8 +804,7 @@ export default function EdgeScreen() {
                             { color: row.roi >= 0 ? GREEN : RED },
                           ]}
                         >
-                          {row.roi >= 0 ? '+' : ''}
-                          {row.roi.toFixed(0)}% ROI
+                          {formatROI(row.roi)} ROI
                         </Text>
                       </View>
                     </View>
@@ -849,8 +851,7 @@ export default function EdgeScreen() {
                 </Text>
                 <Text style={styles.betSizeStatLabel}>ROI</Text>
                 <Text style={[styles.betSizeStatValue, { color: range.roi >= 0 ? GREEN : RED }]}>
-                  {range.roi >= 0 ? '+' : ''}
-                  {range.roi.toFixed(0)}%
+                  {formatROI(range.roi)}
                 </Text>
               </View>
             ))}
@@ -880,7 +881,7 @@ export default function EdgeScreen() {
                   <View key={d.day} style={styles.dayColumn}>
                     <View style={[styles.dayBubble, { backgroundColor: bgColor }]}>
                       <Text style={[styles.dayBubbleText, { color: textColor }]}>
-                        {d.count === 0 ? '—' : `${d.roi.toFixed(0)}%`}
+                        {d.count === 0 ? '—' : formatROI(d.roi)}
                       </Text>
                     </View>
                     <Text style={styles.dayLabel}>{d.day.charAt(0)}</Text>
