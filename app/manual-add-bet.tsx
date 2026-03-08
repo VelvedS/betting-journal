@@ -335,7 +335,10 @@ export default function ManualAddBetScreen() {
   const handleClearPlatform = () => { setIsPlatformOther(false); setCustomPlatform(''); setSelectedPlatform(null); };
 
   // Sport state
-  const [selectedSport, setSelectedSport] = useState<string | null>(params.sport || null);
+  const [selectedSports, setSelectedSports] = useState<string[]>(() => {
+    if (!params.sport) return [];
+    return params.sport.split(',').map((s) => s.trim()).filter(Boolean);
+  });
   const [isSportOther, setIsSportOther] = useState(false);
   const [customSport, setCustomSport] = useState('');
   const [sportSearch, setSportSearch] = useState('');
@@ -345,11 +348,17 @@ export default function ManualAddBetScreen() {
 
   const openSportSheet = () => { setSportSearch(''); sportSheet.openSheet(); };
   const handleSelectSport = (name: string) => {
-    if (name === 'Other') { setSelectedSport(null); setIsSportOther(true); setCustomSport(''); }
-    else { setSelectedSport(name); setIsSportOther(false); setCustomSport(''); }
+    if (name === 'Other') {
+      setIsSportOther((prev) => !prev);
+      setCustomSport('');
+    } else {
+      setSelectedSports((prev) =>
+        prev.includes(name) ? prev.filter((s) => s !== name) : [...prev, name]
+      );
+    }
     sportSheet.closeSheet();
   };
-  const handleClearSport = () => { setIsSportOther(false); setCustomSport(''); setSelectedSport(null); };
+  const handleClearSport = () => { setIsSportOther(false); setCustomSport(''); setSelectedSports([]); };
 
   const toggleMoreSports = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -384,7 +393,8 @@ export default function ManualAddBetScreen() {
   const handleSaveBet = async () => {
     const finalStatus = status || 'pending';
     const sportsbook = isPlatformOther ? customPlatform : selectedPlatform;
-    const sportValue = isSportOther ? customSport : selectedSport;
+    const allSports = [...selectedSports, ...(isSportOther && customSport.trim() ? [customSport.trim()] : [])];
+    const sportValue = allSports.length > 0 ? allSports.join(', ') : null;
 
     if (!user) {
       Alert.alert('Error', 'You must be logged in to save a bet.');
@@ -464,7 +474,7 @@ export default function ManualAddBetScreen() {
         <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {filteredSports.length === 0 ? <View style={styles.emptyContainer}><Text style={styles.emptyText}>No sports found</Text></View> :
             filteredSports.map((sport, i) => {
-              const sel = (!isSportOther && selectedSport === sport) || (isSportOther && sport === 'Other');
+              const sel = sport === 'Other' ? isSportOther : selectedSports.includes(sport);
               return <TouchableOpacity key={`${sport}-${i}`} style={styles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={styles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
             })}
         </ScrollView>
@@ -475,7 +485,7 @@ export default function ManualAddBetScreen() {
         <View style={styles.categoryHeader}><Text style={styles.categoryText}>Popular</Text></View>
         <View style={styles.chipsGrid}>
           {POPULAR_SPORTS.map((sport) => {
-            const sel = !isSportOther && selectedSport === sport;
+            const sel = sport === 'Other' ? isSportOther : selectedSports.includes(sport);
             return <TouchableOpacity key={sport} style={[styles.chip, sel && styles.chipSelected]} onPress={() => handleSelectSport(sport)} activeOpacity={0.7}><Text style={[styles.chipText, sel && styles.chipTextSelected]}>{sport}</Text>{sel && <Ionicons name="checkmark" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />}</TouchableOpacity>;
           })}
         </View>
@@ -489,7 +499,7 @@ export default function ManualAddBetScreen() {
               <View key={cat.category}>
                 <View style={styles.categoryHeader}><Text style={styles.categoryText}>{cat.category}</Text></View>
                 {cat.sports.map((sport, i) => {
-                  const sel = (!isSportOther && selectedSport === sport) || (isSportOther && sport === 'Other');
+                  const sel = sport === 'Other' ? isSportOther : selectedSports.includes(sport);
                   return <TouchableOpacity key={`${sport}-${i}`} style={styles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={styles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
                 })}
               </View>
@@ -595,7 +605,7 @@ export default function ManualAddBetScreen() {
             <Text style={styles.fieldLabel}>Sport</Text>
             <View style={styles.pillsWrap}>
               {POPULAR_SPORTS.map((s) => {
-                const active = isSportOther ? s === 'Other' : selectedSport === s;
+                const active = s === 'Other' ? isSportOther : selectedSports.includes(s);
                 return (
                   <TouchableOpacity key={s} style={[styles.pill, active && styles.pillActive]} onPress={() => handleSelectSport(s)} activeOpacity={0.7}>
                     <Text style={[styles.pillText, active && styles.pillTextActive]}>{s}</Text>
