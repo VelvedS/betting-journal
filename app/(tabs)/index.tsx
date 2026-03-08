@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   SafeAreaView,
+  Animated as RNAnimated,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +18,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { formatCurrency, formatROI, getCurrencySymbol } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
 import PerformanceCurve, { TimePeriod } from '@/components/PerformanceCurve';
@@ -74,12 +79,14 @@ function calcPeriodStats(allBets: any[], period: TimePeriod) {
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Lifetime');
   const [recentBets, setRecentBets] = useState<any[]>([]);
   const [allBets, setAllBets] = useState<any[]>([]);
   const [cursorPL, setCursorPL] = useState<number | null>(null);
+
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
@@ -109,6 +116,21 @@ export default function HomeScreen() {
     }, [fetchDashboardData])
   );
 
+  const onRefresh = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRefreshing(true);
+    await fetchDashboardData();
+    setRefreshing(false);
+  }, [fetchDashboardData]);
+
+  // Blurred header on scroll
+  const scrollY = useRef(new RNAnimated.Value(0)).current;
+  const headerBlurOpacity = scrollY.interpolate({
+    inputRange: [0, 20, 40],
+    outputRange: [0, 0, 1],
+    extrapolate: 'clamp',
+  });
+
   const hasBets = allBets.length > 0;
 
   // Period-specific P&L and wagered
@@ -127,12 +149,56 @@ export default function HomeScreen() {
 
   const displayName = user?.user_metadata?.full_name?.split(' ')[0] || 'there';
 
+  // Animated gradient for profit card
+  const gradientAnim = useRef(new RNAnimated.Value(0)).current;
+  useEffect(() => {
+    if (displayProfit > 0) {
+      RNAnimated.loop(
+        RNAnimated.timing(gradientAnim, { toValue: 1, duration: 3000, useNativeDriver: false }),
+      ).start();
+    } else {
+      gradientAnim.setValue(0);
+    }
+  }, [displayProfit > 0]);
+
+  const gradientOpacity = gradientAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.15, 0.35, 0.15],
+  });
+
+  // Live number ticker — reset on focus so it counts up each time
+  const [tickerKey, setTickerKey] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      setTickerKey((k) => k + 1);
+    }, [])
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style={colors.statusBar} />
+
+      {/* Blurred header overlay */}
+      <RNAnimated.View style={[styles.blurHeader, { opacity: headerBlurOpacity }]} pointerEvents="none">
+        <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+      </RNAnimated.View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.chipActiveBg}
+            colors={[colors.chipActiveBg]}
+          />
+        }
+        onScroll={RNAnimated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
       >
         {/* Header Section */}
         <FadeInView delay={0} direction="bottom">
@@ -145,6 +211,16 @@ export default function HomeScreen() {
         {/* Total Profit/Loss Card */}
         <FadeInView delay={80} direction="bottom">
           <View style={styles.profitCard}>
+            {displayProfit > 0 && (
+              <RNAnimated.View style={[StyleSheet.absoluteFill, { opacity: gradientOpacity, borderRadius: 16, overflow: 'hidden' }]}>
+                <LinearGradient
+                  colors={[colors.surface, '#0D2B1F']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </RNAnimated.View>
+            )}
             <Text style={styles.profitLabel}>
               {cursorPL !== null ? 'P&L AT POINT' : 'TOTAL PROFIT/LOSS'}
             </Text>
@@ -164,11 +240,12 @@ export default function HomeScreen() {
                   ) : showBalance ? (
                     // Animated count-up for period total
                     <AnimatedNumber
-                      key={selectedPeriod}
+                      key={`${selectedPeriod}-${tickerKey}`}
                       value={Math.abs(displayProfit)}
                       prefix={displayProfit >= 0 ? currencySymbol : `-${currencySymbol}`}
                       decimals={0}
                       delay={0}
+                      duration={1200}
                       style={{ ...styles.profitValue, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}
                     />
                   ) : (
@@ -193,12 +270,13 @@ export default function HomeScreen() {
                       </Text>
                     ) : showBalance ? (
                       <AnimatedNumber
-                        key={`pct-${selectedPeriod}`}
+                        key={`pct-${selectedPeriod}-${tickerKey}`}
                         value={Math.abs(roiPct)}
                         prefix={roiPct >= 0 ? '+' : '-'}
                         suffix="%"
                         decimals={0}
                         delay={0}
+                        duration={1200}
                         style={{ ...styles.percentageText, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}
                       />
                     ) : (
@@ -227,6 +305,7 @@ export default function HomeScreen() {
                     selectedPeriod === period && styles.tabActive,
                   ]}
                   onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setSelectedPeriod(period);
                     setCursorPL(null);
                   }}
@@ -266,7 +345,7 @@ export default function HomeScreen() {
               {hasBets && (
                 <AnimatedPressable
                   style={styles.viewAllButton}
-                  onPress={() => router.push('/(tabs)/stats')}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/stats'); }}
                   scaleDown={0.93}
                 >
                   <Text style={styles.viewAllText}>View All</Text>
@@ -296,7 +375,7 @@ export default function HomeScreen() {
                 <FadeInView key={bet.id} delay={360 + index * 80} direction="bottom">
                   <AnimatedPressable
                     style={styles.activityCard}
-                    onPress={() => router.push(`/bet-details/${bet.id}`)}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/bet-details/${bet.id}`); }}
                     scaleDown={0.98}
                   >
                     <View style={styles.activityHeader}>
@@ -370,7 +449,7 @@ export default function HomeScreen() {
                 </Text>
                 <AnimatedPressable
                   style={styles.emptyButton}
-                  onPress={() => router.push('/(tabs)/add-bet')}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/add-bet'); }}
                   scaleDown={0.97}
                 >
                   <Text style={styles.emptyButtonText}>Add Your First Bet</Text>
@@ -389,6 +468,14 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  blurHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    zIndex: 10,
   },
   scrollContent: {
     paddingHorizontal: 20,

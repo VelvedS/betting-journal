@@ -24,13 +24,15 @@
  * ──────────────────────────────────────────────
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   SafeAreaView,
+  Animated,
+  RefreshControl,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,10 +42,12 @@ import { ThemeColors } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import AnimatedPressable from '@/components/AnimatedPressable';
+import { BlurView } from 'expo-blur';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
 import { formatROI, getCurrencySymbol } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
+import * as Haptics from 'expo-haptics';
 
 // ──────────────────────────────────────
 // Types
@@ -527,6 +531,7 @@ export default function EdgeScreen() {
   const [bets, setBets] = useState<Bet[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // ── Data fetching ────────────────────
   const fetchData = useCallback(async () => {
@@ -583,6 +588,21 @@ export default function EdgeScreen() {
       fetchData();
     }, [fetchData])
   );
+
+  const onRefresh = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
+
+  // Blurred header on scroll
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerBlurOpacity = scrollY.interpolate({
+    inputRange: [0, 20, 40],
+    outputRange: [0, 0, 1],
+    extrapolate: 'clamp',
+  });
 
   // ── Computed stats ───────────────────
   const settled = useMemo(() => bets.filter((b) => b.status === 'won' || b.status === 'lost'), [bets]);
@@ -1029,9 +1049,28 @@ export default function EdgeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style={colors.statusBar} />
+
+      {/* Blurred header overlay */}
+      <Animated.View style={[styles.blurHeader, { opacity: headerBlurOpacity }]} pointerEvents="none">
+        <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+      </Animated.View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.chipActiveBg}
+            colors={[colors.chipActiveBg]}
+          />
+        }
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
       >
         {/* Header */}
         <FadeInView delay={0} direction="bottom">
@@ -1042,7 +1081,7 @@ export default function EdgeScreen() {
             </View>
             <AnimatedPressable
               style={[styles.themeButton, { backgroundColor: colors.surface }]}
-              onPress={toggleTheme}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); toggleTheme(); }}
               scaleDown={0.9}
             >
               <Ionicons
@@ -1064,7 +1103,7 @@ export default function EdgeScreen() {
                   styles.segmentTab,
                   activeTab === tab && styles.segmentTabActive,
                 ]}
-                onPress={() => setActiveTab(tab)}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab(tab); }}
                 scaleDown={0.96}
               >
                 <Text
@@ -1096,6 +1135,14 @@ function createStyles(colors: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    blurHeader: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 100,
+      zIndex: 10,
     },
     scrollContent: {
       paddingHorizontal: 20,

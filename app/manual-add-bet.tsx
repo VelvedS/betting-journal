@@ -35,6 +35,7 @@ import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
 import { useTheme } from '@/context/ThemeContext';
 import { usePreferences } from '@/context/PreferencesContext';
+import * as Haptics from 'expo-haptics';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -309,6 +310,7 @@ export default function ManualAddBetScreen() {
   };
 
   const handleOpenDatePicker = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setTempDate(placedAt || new Date());
     setShowDatePicker(true);
   };
@@ -329,6 +331,7 @@ export default function ManualAddBetScreen() {
   const [customPlatform, setCustomPlatform] = useState('');
 
   const handleSelectPlatform = (name: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (name === 'Other') { setSelectedPlatform(null); setIsPlatformOther(true); setCustomPlatform(''); }
     else { setSelectedPlatform(name); setIsPlatformOther(false); setCustomPlatform(''); }
   };
@@ -348,6 +351,7 @@ export default function ManualAddBetScreen() {
 
   const openSportSheet = () => { setSportSearch(''); sportSheet.openSheet(); };
   const handleSelectSport = (name: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (name === 'Other') {
       setIsSportOther((prev) => !prev);
       setCustomSport('');
@@ -373,10 +377,11 @@ export default function ManualAddBetScreen() {
   const getOddsPlaceholder = () => {
     switch (oddsFormat) { case 'american': return '+150 or -110'; case 'decimal': return '2.50'; case 'fractional': return '3/2'; default: return '+150 or -110'; }
   };
-  const toggleTag = (tag: string) => { setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]); };
+  const toggleTag = (tag: string) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]); };
 
   // Parlay legs helpers
   const addParlayLeg = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setParlayLegs([...parlayLegs, { description: '', odds: '', status: 'pending' }]);
   };
 
@@ -397,6 +402,7 @@ export default function ManualAddBetScreen() {
     const sportValue = allSports.length > 0 ? allSports.join(', ') : null;
 
     if (!user) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'You must be logged in to save a bet.');
       return;
     }
@@ -457,10 +463,12 @@ export default function ManualAddBetScreen() {
       }
 
       setIsSaving(false);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       router.back();
     } catch (err: any) {
       console.error('Failed to save bet:', err);
       setIsSaving(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'Failed to save bet. Please try again.');
     }
   };
@@ -517,7 +525,7 @@ export default function ManualAddBetScreen() {
 
         {/* ── Header ── */}
         <View style={styles.header}>
-          <AnimatedPressable style={styles.backBtn} onPress={() => router.back()} scaleDown={0.9}>
+          <AnimatedPressable style={styles.backBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }} scaleDown={0.9}>
             <Ionicons name="arrow-back" size={22} color={colors.text} />
           </AnimatedPressable>
           <Text style={styles.headerTitle}>Add Bet</Text>
@@ -544,7 +552,7 @@ export default function ManualAddBetScreen() {
             <TouchableOpacity
               key={label}
               style={[styles.tab, activeTab === i && styles.tabActive]}
-              onPress={() => setActiveTab(i)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab(i); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.tabText, activeTab === i && styles.tabTextActive]}>{label}</Text>
@@ -591,7 +599,7 @@ export default function ManualAddBetScreen() {
             <Text style={styles.fieldLabel}>Bet Type</Text>
             <View style={styles.pillsWrap}>
               {(['moneyline', 'spread', 'ou', 'parlay', 'prop', 'other'] as BetType[]).map((t) => (
-                <TouchableOpacity key={t} style={[styles.pill, betType === t && styles.pillActive]} onPress={() => setBetType(t)} activeOpacity={0.7}>
+                <TouchableOpacity key={t} style={[styles.pill, betType === t && styles.pillActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setBetType(t); }} activeOpacity={0.7}>
                   <Text style={[styles.pillText, betType === t && styles.pillTextActive]}>
                     {t === 'ou' ? 'O/U' : t.charAt(0).toUpperCase() + t.slice(1)}
                   </Text>
@@ -672,7 +680,7 @@ export default function ManualAddBetScreen() {
               <Text style={styles.fieldLabel}>Odds</Text>
               <View style={styles.oddsFormatRow}>
                 {(['american', 'decimal', 'fractional'] as OddsFormat[]).map((fmt) => (
-                  <TouchableOpacity key={fmt} style={[styles.fmtPill, oddsFormat === fmt && styles.fmtPillActive]} onPress={() => setOddsFormat(fmt)} activeOpacity={0.7}>
+                  <TouchableOpacity key={fmt} style={[styles.fmtPill, oddsFormat === fmt && styles.fmtPillActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setOddsFormat(fmt); }} activeOpacity={0.7}>
                     <Text style={[styles.fmtText, oddsFormat === fmt && styles.fmtTextActive]}>
                       {fmt.charAt(0).toUpperCase() + fmt.slice(1)}
                     </Text>
@@ -730,7 +738,7 @@ export default function ManualAddBetScreen() {
             <Text style={styles.fieldLabel}>Status</Text>
             <View style={styles.statusRow}>
               {(['pending', 'won', 'lost', 'void'] as BetStatus[]).map((s) => (
-                <StatusPill key={s} value={s} selected={status === s} onPress={() => setStatus(s)} />
+                <StatusPill key={s} value={s} selected={status === s} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStatus(s); }} />
               ))}
             </View>
           </View>
@@ -950,7 +958,7 @@ export default function ManualAddBetScreen() {
         {/* ── Navigation Buttons ── */}
         <View style={styles.navRow}>
           {activeTab > 0 ? (
-            <TouchableOpacity style={styles.navBtn} onPress={() => setActiveTab(activeTab - 1)} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.navBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab(activeTab - 1); }} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
               <Text style={styles.navBtnText}>Previous</Text>
             </TouchableOpacity>
@@ -959,7 +967,7 @@ export default function ManualAddBetScreen() {
           )}
 
           {activeTab < 2 ? (
-            <TouchableOpacity style={styles.navBtn} onPress={() => setActiveTab(activeTab + 1)} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.navBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab(activeTab + 1); }} activeOpacity={0.7}>
               <Text style={styles.navBtnText}>Next</Text>
               <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
             </TouchableOpacity>

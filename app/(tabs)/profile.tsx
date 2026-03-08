@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { getCurrencySymbol } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
+import * as Haptics from 'expo-haptics';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
 
@@ -206,7 +207,7 @@ export default function ProfileScreen() {
               <AnimatedPressable
                 key={item.route}
                 style={styles.menuRow}
-                onPress={() => router.push(item.route as any)}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(item.route as any); }}
                 scaleDown={0.98}
               >
                 <View style={styles.menuIconCircle}>
@@ -224,7 +225,7 @@ export default function ProfileScreen() {
 
         {/* Sign Out Button */}
         <FadeInView delay={380} direction="bottom">
-          <AnimatedPressable style={styles.signOutButton} onPress={handleSignOut} scaleDown={0.97}>
+          <AnimatedPressable style={styles.signOutButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleSignOut(); }} scaleDown={0.97}>
             <Ionicons name="log-out-outline" size={20} color="#E85D5D" style={styles.signOutIcon} />
             <Text style={styles.signOutText}>Sign Out</Text>
           </AnimatedPressable>

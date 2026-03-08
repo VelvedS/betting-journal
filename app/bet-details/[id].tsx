@@ -26,6 +26,9 @@ import RAnimated, {
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
 import { useTheme } from '@/context/ThemeContext';
+import * as Haptics from 'expo-haptics';
+import ConfettiCannon from 'react-native-confetti-cannon';
+import { Dimensions } from 'react-native';
 import { usePreferences } from '@/context/PreferencesContext';
 import { formatCurrency, formatROI, formatOdds } from '@/lib/formatters';
 
@@ -134,6 +137,8 @@ export default function BetDetailsScreen() {
   const [toast, setToast] = useState<ToastState>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const confettiRef = useRef<any>(null);
+  const { width } = Dimensions.get('window');
 
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -203,8 +208,10 @@ export default function BetDetailsScreen() {
             try {
               const { error } = await supabase.from('bets').delete().eq('id', bet.id);
               if (error) throw error;
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               router.back();
             } catch (err: any) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
               showToast(err.message || 'Failed to delete bet');
               setDeleting(false);
             }
@@ -223,20 +230,60 @@ export default function BetDetailsScreen() {
       .eq('id', bet.id);
     if (error) {
       console.error('Failed to update status:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'Failed to update status. Please try again.');
     } else {
       setBet({ ...bet, status: newStatus });
       setShowStatusUpdate(false);
+      if (newStatus === 'won') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        confettiRef.current?.start();
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
     }
     setUpdatingStatus(false);
   };
+
+  // Skeleton shimmer animation
+  const skeletonAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (loading) {
+      Animated.loop(
+        Animated.timing(skeletonAnim, { toValue: 1, duration: 800, useNativeDriver: true })
+      ).start();
+    }
+  }, [loading]);
+  const skeletonOpacity = skeletonAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.3, 0.7, 0.3],
+  });
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style={colors.statusBar} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366F1" />
+        <View style={styles.scrollContent}>
+          {/* Header skeleton */}
+          <View style={styles.header}>
+            <Animated.View style={[styles.skeletonCircle, { opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
+            <Animated.View style={[styles.skeletonBar, { width: 120, height: 24, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
+          </View>
+          {/* Status banner skeleton */}
+          <Animated.View style={[styles.skeletonBlock, { height: 120, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
+          {/* Stat row skeleton */}
+          <View style={[styles.statsRow, { marginTop: 16 }]}>
+            <Animated.View style={[styles.skeletonBlock, { flex: 1, height: 60, marginRight: 8, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
+            <Animated.View style={[styles.skeletonBlock, { flex: 1, height: 60, marginRight: 8, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
+            <Animated.View style={[styles.skeletonBlock, { flex: 1, height: 60, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
+          </View>
+          {/* Details card skeleton */}
+          <Animated.View style={[styles.skeletonBlock, { height: 180, marginTop: 16, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
+          {/* Button skeletons */}
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+            <Animated.View style={[styles.skeletonPill, { flex: 1, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
+            <Animated.View style={[styles.skeletonPill, { flex: 1, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -279,7 +326,7 @@ export default function BetDetailsScreen() {
           <View style={styles.header}>
             <AnimatedPressable
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
               scaleDown={0.9}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -312,7 +359,7 @@ export default function BetDetailsScreen() {
         <FadeInView delay={140} direction="none">
           <AnimatedPressable
             style={styles.updateStatusButton}
-            onPress={() => setShowStatusUpdate(!showStatusUpdate)}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowStatusUpdate(!showStatusUpdate); }}
             scaleDown={0.95}
           >
             <Ionicons name="swap-horizontal" size={16} color={colors.text} />
@@ -436,7 +483,7 @@ export default function BetDetailsScreen() {
         <FadeInView delay={440} direction="bottom">
           <AnimatedPressable
             style={[styles.deleteButton, deleting && styles.deleteButtonDisabled]}
-            onPress={handleDeleteBet}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleDeleteBet(); }}
             scaleDown={0.97}
             disabled={deleting}
           >
@@ -458,6 +505,16 @@ export default function BetDetailsScreen() {
           <Text style={styles.toastText}>{toast.message}</Text>
         </Animated.View>
       )}
+
+      {/* Confetti on Won */}
+      <ConfettiCannon
+        ref={confettiRef}
+        count={80}
+        origin={{ x: width / 2, y: -20 }}
+        fadeOut
+        autoStart={false}
+        colors={['#10B981', '#34D399', '#6EE7B7', '#ffffff']}
+      />
     </SafeAreaView>
   );
 }
@@ -766,6 +823,21 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       fontWeight: '600',
       color: '#FFFFFF',
       flex: 1,
+    },
+    skeletonCircle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+    },
+    skeletonBar: {
+      borderRadius: 8,
+    },
+    skeletonBlock: {
+      borderRadius: 16,
+    },
+    skeletonPill: {
+      height: 48,
+      borderRadius: 24,
     },
   });
 }

@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Animated,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -18,6 +19,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { formatCurrency, formatROI, formatWholeNumber } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
+import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
 import FadeInView from '@/components/FadeInView';
 
 type FilterType = 'All' | 'Wins' | 'Losses' | 'Pending';
@@ -35,11 +38,12 @@ const getStatusConfig = (status: string) => {
 export default function StatsScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { currency, showBalance } = usePreferences();
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All');
   const [allBets, setAllBets] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchBets = useCallback(async () => {
     if (!user) return;
@@ -57,6 +61,21 @@ export default function StatsScreen() {
       fetchBets();
     }, [fetchBets])
   );
+
+  const onRefresh = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRefreshing(true);
+    await fetchBets();
+    setRefreshing(false);
+  }, [fetchBets]);
+
+  // Blurred header on scroll
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerBlurOpacity = scrollY.interpolate({
+    inputRange: [0, 20, 40],
+    outputRange: [0, 0, 1],
+    extrapolate: 'clamp',
+  });
 
   const hasBets = allBets.length > 0;
 
@@ -134,9 +153,28 @@ export default function StatsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style={colors.statusBar} />
+
+      {/* Blurred header overlay */}
+      <Animated.View style={[styles.blurHeader, { opacity: headerBlurOpacity }]} pointerEvents="none">
+        <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+      </Animated.View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.chipActiveBg}
+            colors={[colors.chipActiveBg]}
+          />
+        }
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
       >
         {/* Header */}
         <FadeInView delay={0} direction="bottom">
@@ -278,7 +316,7 @@ export default function StatsScreen() {
                     styles.filterTab,
                     selectedFilter === filter && styles.filterTabActive,
                   ]}
-                  onPress={() => setSelectedFilter(filter)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedFilter(filter); }}
                   scaleDown={0.93}
                 >
                   <Text
@@ -309,7 +347,7 @@ export default function StatsScreen() {
               <FadeInView key={bet.id} delay={500 + index * 60} direction="bottom">
                 <AnimatedPressable
                   style={styles.betCard}
-                  onPress={() => router.push(`/bet-details/${bet.id}`)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/bet-details/${bet.id}`); }}
                   scaleDown={0.98}
                 >
                   <View style={styles.betHeader}>
@@ -370,6 +408,14 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  blurHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    zIndex: 10,
   },
   scrollContent: {
     paddingHorizontal: 20,
