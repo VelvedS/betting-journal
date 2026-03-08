@@ -126,7 +126,7 @@ function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: 
 
 export default function BetDetailsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { id } = useLocalSearchParams();
   const [bet, setBet] = useState<any>(null);
   const [parlayLegs, setParlayLegs] = useState<any[]>([]);
@@ -240,6 +240,17 @@ export default function BetDetailsScreen() {
         confettiRef.current?.start();
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+
+      // Send push notification for won/lost results
+      if ((newStatus === 'won' || newStatus === 'lost') && user?.id && session?.access_token) {
+        const notifTitle = newStatus === 'won' ? 'Bet Won! 🎉' : 'Bet Settled';
+        const notifBody = newStatus === 'won'
+          ? `Your ${bet.sportsbook} ${bet.bet_type} bet won! ${formatCurrency(bet.potential_payout, currency)} added to your record`
+          : `Your ${bet.sportsbook} ${bet.bet_type} bet has been marked as lost`;
+        supabase.functions.invoke('send-notification', {
+          body: { user_id: user.id, title: notifTitle, body: notifBody, data: { type: 'betResults' } },
+        }).catch((err) => console.error('[Push] Failed to send bet result notification:', err));
       }
     }
     setUpdatingStatus(false);

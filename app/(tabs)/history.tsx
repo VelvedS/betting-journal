@@ -577,6 +577,21 @@ export default function EdgeScreen() {
         .select();
       if (inserted) {
         setAchievements((prev) => [...prev, ...inserted]);
+
+        // Send push notification for each newly unlocked badge
+        inserted.forEach((ach: Achievement) => {
+          const badgeDef = BADGE_DEFINITIONS.find((d) => d.id === ach.badge_id);
+          if (badgeDef) {
+            supabase.functions.invoke('send-notification', {
+              body: {
+                user_id: user.id,
+                title: 'Achievement Unlocked! 🏆',
+                body: `You earned the ${badgeDef.name} badge — ${badgeDef.description}`,
+                data: { type: 'achievements' },
+              },
+            }).catch((err) => console.error('[Push] Failed to send achievement notification:', err));
+          }
+        });
       }
     }
 
@@ -1068,7 +1083,7 @@ export default function EdgeScreen() {
         }
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
       >
