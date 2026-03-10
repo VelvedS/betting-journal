@@ -1,15 +1,27 @@
+import { useEffect } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { AuthProvider } from '@/context/AuthContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ThemeProvider as AppThemeProvider, useTheme } from '@/context/ThemeContext';
 import { PreferencesProvider } from '@/context/PreferencesContext';
+import { scheduleWeeklyRecap } from '@/lib/weeklyRecap';
 
 function RootLayoutInner() {
   const { theme, colors } = useTheme();
+  const { user } = useAuth();
+
+  // Schedule weekly recap notification on each app open
+  useEffect(() => {
+    if (user?.id) {
+      scheduleWeeklyRecap(user.id).catch((err) =>
+        console.warn('[WeeklyRecap] Schedule error:', err)
+      );
+    }
+  }, [user?.id]);
   const navTheme = theme === 'dark' ? DarkTheme : DefaultTheme;
 
   return (

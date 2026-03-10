@@ -508,7 +508,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     avatarImage: { width: 86, height: 86, borderRadius: 43 },
     cameraBadge: {
       position: 'absolute', bottom: 2, right: 2, width: 26, height: 26,
-      borderRadius: 13, backgroundColor: '#10B981', alignItems: 'center',
+      borderRadius: 13, backgroundColor: colors.accent, alignItems: 'center',
       justifyContent: 'center', borderWidth: 2, borderColor: colors.surface,
     },
     uploadButton: {
@@ -533,7 +533,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
 
     // Save button
     saveButton: {
-      backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 16,
+      backgroundColor: colors.accent, borderRadius: 12, paddingVertical: 16,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
       marginBottom: 22, height: 54,
     },
@@ -566,7 +566,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.18, shadowRadius: 8, elevation: 6,
     },
-    toastSuccess: { backgroundColor: '#10B981' },
+    toastSuccess: { backgroundColor: colors.accent },
     toastError: { backgroundColor: '#E85D5D' },
     toastText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', flex: 1 },
   });

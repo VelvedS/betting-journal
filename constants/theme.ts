@@ -36,6 +36,16 @@ export type ThemeColors = {
   dividerLine: string;
   // Status bar style
   statusBar: 'dark' | 'light';
+  // Accent (unified green)
+  accent: string;
+  accentBg: string;
+  // Nav glass
+  navGlass: string;
+  navGlassBorder: string;
+  navGlassHighlight: string;
+  navGlassShadow: string;
+  navActiveIndicator: string;
+  navFadeGradientEnd: string;
 };
 
 export const lightColors: ThemeColors = {
@@ -63,6 +73,14 @@ export const lightColors: ThemeColors = {
   buttonPrimaryText: '#FFFFFF',
   dividerLine: '#E0E0E0',
   statusBar: 'dark',
+  accent: '#2DC672',
+  accentBg: 'rgba(45, 198, 114, 0.12)',
+  navGlass: 'rgba(255, 255, 255, 0.30)',
+  navGlassBorder: 'rgba(255, 255, 255, 0.15)',
+  navGlassHighlight: 'rgba(255, 255, 255, 0.5)',
+  navGlassShadow: 'rgba(0, 0, 0, 0.08)',
+  navActiveIndicator: 'rgba(0, 0, 0, 0.06)',
+  navFadeGradientEnd: 'rgba(245, 245, 245, 0.95)',
 };
 
 export const darkColors: ThemeColors = {
@@ -90,6 +108,14 @@ export const darkColors: ThemeColors = {
   buttonPrimaryText: '#111111',
   dividerLine: '#2C2C2C',
   statusBar: 'light',
+  accent: '#2DC672',
+  accentBg: 'rgba(45, 198, 114, 0.15)',
+  navGlass: 'rgba(30, 30, 30, 0.25)',
+  navGlassBorder: 'rgba(255, 255, 255, 0.08)',
+  navGlassHighlight: 'rgba(255, 255, 255, 0.2)',
+  navGlassShadow: 'rgba(0, 0, 0, 0.4)',
+  navActiveIndicator: 'rgba(255, 255, 255, 0.07)',
+  navFadeGradientEnd: 'rgba(10, 10, 10, 0.95)',
 };
 
 export const Colors = {

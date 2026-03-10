@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
+import TabScreenTransition from '@/components/TabScreenTransition';
 
 type ScreenState = 'default' | 'processing' | 'success' | 'error';
 
@@ -362,6 +363,7 @@ export default function AddBetScreen() {
 
   if (screen === 'processing') {
     return (
+      <TabScreenTransition>
       <SafeAreaView style={styles.container}>
         <StatusBar style={colors.statusBar} />
         <View style={styles.fullScreenContainer}>
@@ -412,11 +414,13 @@ export default function AddBetScreen() {
           </View>
         </View>
       </SafeAreaView>
+      </TabScreenTransition>
     );
   }
 
   if (screen === 'success') {
     return (
+      <TabScreenTransition>
       <SafeAreaView style={styles.container}>
         <StatusBar style={colors.statusBar} />
         <AnimatedPressable
@@ -441,7 +445,7 @@ export default function AddBetScreen() {
                 ]}
               >
                 <View style={styles.checkmarkCircle}>
-                  <Ionicons name="checkmark-circle" size={40} color="#10B981" />
+                  <Ionicons name="checkmark-circle" size={40} color={colors.accent} />
                 </View>
               </RNAnimated.View>
 
@@ -453,11 +457,13 @@ export default function AddBetScreen() {
           </View>
         </AnimatedPressable>
       </SafeAreaView>
+      </TabScreenTransition>
     );
   }
 
   if (screen === 'error') {
     return (
+      <TabScreenTransition>
       <SafeAreaView style={styles.container}>
         <StatusBar style={colors.statusBar} />
         <View style={styles.fullScreenContainer}>
@@ -500,11 +506,13 @@ export default function AddBetScreen() {
           </View>
         </View>
       </SafeAreaView>
+      </TabScreenTransition>
     );
   }
 
   // Default Add Bet Screen
   return (
+    <TabScreenTransition>
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -579,6 +587,7 @@ export default function AddBetScreen() {
         </FadeInView>
       </ScrollView>
     </SafeAreaView>
+    </TabScreenTransition>
   );
 }
 
@@ -719,7 +728,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       width: 86,
       height: 86,
       borderRadius: 43,
-      backgroundColor: '#E8F8F0',
+      backgroundColor: colors.accentBg,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -910,7 +919,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       paddingVertical: 14,
       paddingHorizontal: 20,
       borderRadius: 10,
-      backgroundColor: '#10B981',
+      backgroundColor: colors.accent,
       alignItems: 'center',
       justifyContent: 'center',
     },

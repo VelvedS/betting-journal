@@ -221,7 +221,7 @@ export default function PerformanceCurve({
 
   const finalValue = chartData[chartData.length - 1].value;
   const isNegative = finalValue < 0;
-  const lineColor = isNegative ? '#FF3B30' : '#00D632';
+  const lineColor = isNegative ? '#FF3B30' : '#2DC672';
 
   const outerWidth = Dimensions.get('window').width - 80;
   const chartLineWidth = outerWidth - Y_AXIS_WIDTH;

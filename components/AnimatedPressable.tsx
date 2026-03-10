@@ -1,11 +1,12 @@
 import React from 'react';
-import { Pressable, PressableProps } from 'react-native';
+import { Platform, Pressable, PressableProps } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
 import { springConfig } from '@/lib/animations';
+import * as Haptics from 'expo-haptics';
 
 const AnimatedPressableBase = Animated.createAnimatedComponent(Pressable);
 
@@ -33,6 +34,9 @@ export default function AnimatedPressable({
       style={[animatedStyle, style as any]}
       onPressIn={(e) => {
         scale.value = withSpring(scaleDown, springConfig);
+        if (Platform.OS !== 'web') {
+          try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+        }
         onPressIn?.(e);
       }}
       onPressOut={(e) => {

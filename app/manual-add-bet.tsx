@@ -114,8 +114,8 @@ function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: 
   const getStyles = () => {
     if (!selected) return { bg: colors.input, text: colors.textSecondary, border: colors.border, bw: 1 };
     switch (value) {
-      case 'pending': return { bg: 'transparent', text: '#2DC672', border: '#2DC672', bw: 1 };
-      case 'won': return { bg: '#2DC672', text: '#FFFFFF', border: '#2DC672', bw: 0 };
+      case 'pending': return { bg: 'transparent', text: colors.accent, border: colors.accent, bw: 1 };
+      case 'won': return { bg: colors.accent, text: '#FFFFFF', border: colors.accent, bw: 0 };
       case 'lost': return { bg: '#E85D5D', text: '#FFFFFF', border: '#E85D5D', bw: 0 };
       case 'void': return { bg: '#999999', text: '#FFFFFF', border: '#999999', bw: 0 };
     }
@@ -148,7 +148,11 @@ export default function ManualAddBetScreen() {
     description?: string; odds?: string; odds_format?: string; wager?: string;
     potential_payout?: string; status?: string; placed_at?: string; notes?: string;
     ticket_image_url?: string; parlay_legs?: string; tags?: string; confidence?: string;
+    id?: string; isEditing?: string; platform?: string; date?: string;
   }>();
+
+  const isEditing = params.isEditing === 'true';
+  const editBetId = params.id;
 
   const hasRouteParams = Object.keys(params).length > 0;
   const { user } = useAuth();
@@ -277,7 +281,8 @@ export default function ManualAddBetScreen() {
 
   // Date state
   const [placedAt, setPlacedAt] = useState<Date | null>(() => {
-    if (params.placed_at) { const d = new Date(params.placed_at); return isNaN(d.getTime()) ? null : d; }
+    const dateParam = params.placed_at || params.date;
+    if (dateParam) { const d = new Date(dateParam); return isNaN(d.getTime()) ? null : d; }
     return null;
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -323,10 +328,10 @@ export default function ManualAddBetScreen() {
   // Ticket image
   const [ticketImageUrl, setTicketImageUrl] = useState(params.ticket_image_url || '');
   const [confidence, setConfidence] = useState(() => params.confidence ? parseFloat(params.confidence) : null);
-  const [showAiBanner, setShowAiBanner] = useState(hasRouteParams);
+  const [showAiBanner, setShowAiBanner] = useState(hasRouteParams && !isEditing);
 
   // Platform state
-  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(params.sportsbook || null);
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(params.sportsbook || params.platform || null);
   const [isPlatformOther, setIsPlatformOther] = useState(false);
   const [customPlatform, setCustomPlatform] = useState('');
 
@@ -439,37 +444,69 @@ export default function ManualAddBetScreen() {
     };
 
     try {
-      const { data, error } = await supabase.from('bets').insert(payload).select().single();
-      if (error) throw error;
+      if (isEditing && editBetId) {
+        // Update existing bet
+        const { user_id, created_at, ...updatePayload } = payload;
+        const { error } = await supabase.from('bets').update(updatePayload).eq('id', editBetId);
+        if (error) throw error;
 
-      if (selectedTags.length > 0 && data?.id) {
-        await supabase.from('bet_tags').insert(selectedTags.map(tag => ({ bet_id: data.id, tag })));
-      }
+        // Replace tags: delete existing, insert current
+        await supabase.from('bet_tags').delete().eq('bet_id', editBetId);
+        if (selectedTags.length > 0) {
+          await supabase.from('bet_tags').insert(selectedTags.map(tag => ({ bet_id: editBetId, tag })));
+        }
 
-      if (betType === 'parlay' && parlayLegs.length > 0 && data?.id) {
-        try {
+        // Replace parlay legs: delete existing, insert current
+        await supabase.from('parlay_legs').delete().eq('bet_id', editBetId);
+        if (betType === 'parlay' && parlayLegs.length > 0) {
           await supabase.from('parlay_legs').insert(
             parlayLegs.map((leg: any, idx: number) => ({
-              bet_id: data.id,
+              bet_id: editBetId,
               description: leg.description || '',
               odds: leg.odds || '',
               status: leg.status || 'pending',
               order: idx + 1,
             }))
           );
-        } catch (err) {
-          console.error('Failed to save parlay legs:', err);
         }
-      }
 
-      setIsSaving(false);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      router.back();
+        setIsSaving(false);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        router.replace(`/bet-details/${editBetId}`);
+      } else {
+        // Insert new bet
+        const { data, error } = await supabase.from('bets').insert(payload).select().single();
+        if (error) throw error;
+
+        if (selectedTags.length > 0 && data?.id) {
+          await supabase.from('bet_tags').insert(selectedTags.map(tag => ({ bet_id: data.id, tag })));
+        }
+
+        if (betType === 'parlay' && parlayLegs.length > 0 && data?.id) {
+          try {
+            await supabase.from('parlay_legs').insert(
+              parlayLegs.map((leg: any, idx: number) => ({
+                bet_id: data.id,
+                description: leg.description || '',
+                odds: leg.odds || '',
+                status: leg.status || 'pending',
+                order: idx + 1,
+              }))
+            );
+          } catch (err) {
+            console.error('Failed to save parlay legs:', err);
+          }
+        }
+
+        setIsSaving(false);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        router.back();
+      }
     } catch (err: any) {
       console.error('Failed to save bet:', err);
       setIsSaving(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to save bet. Please try again.');
+      Alert.alert('Error', isEditing ? 'Failed to update bet. Please try again.' : 'Failed to save bet. Please try again.');
     }
   };
 
@@ -483,7 +520,7 @@ export default function ManualAddBetScreen() {
           {filteredSports.length === 0 ? <View style={styles.emptyContainer}><Text style={styles.emptyText}>No sports found</Text></View> :
             filteredSports.map((sport, i) => {
               const sel = sport === 'Other' ? isSportOther : selectedSports.includes(sport);
-              return <TouchableOpacity key={`${sport}-${i}`} style={styles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={styles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
+              return <TouchableOpacity key={`${sport}-${i}`} style={styles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={styles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color={colors.accent} />}</TouchableOpacity>;
             })}
         </ScrollView>
       );
@@ -508,7 +545,7 @@ export default function ManualAddBetScreen() {
                 <View style={styles.categoryHeader}><Text style={styles.categoryText}>{cat.category}</Text></View>
                 {cat.sports.map((sport, i) => {
                   const sel = sport === 'Other' ? isSportOther : selectedSports.includes(sport);
-                  return <TouchableOpacity key={`${sport}-${i}`} style={styles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={styles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color="#2DC672" />}</TouchableOpacity>;
+                  return <TouchableOpacity key={`${sport}-${i}`} style={styles.listRow} onPress={() => handleSelectSport(sport)} activeOpacity={0.6}><Text style={styles.listRowText}>{sport}</Text>{sel && <Ionicons name="checkmark" size={18} color={colors.accent} />}</TouchableOpacity>;
                 })}
               </View>
             ))}
@@ -528,7 +565,7 @@ export default function ManualAddBetScreen() {
           <AnimatedPressable style={styles.backBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }} scaleDown={0.9}>
             <Ionicons name="arrow-back" size={22} color={colors.text} />
           </AnimatedPressable>
-          <Text style={styles.headerTitle}>Add Bet</Text>
+          <Text style={styles.headerTitle}>{isEditing ? 'Edit Bet' : 'Add Bet'}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -981,7 +1018,7 @@ export default function ManualAddBetScreen() {
               {isSaving ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.saveBtnText}>Save Bet</Text>
+                <Text style={styles.saveBtnText}>{isEditing ? 'Save Changes' : 'Save Bet'}</Text>
               )}
             </AnimatedPressable>
           )}
@@ -1070,14 +1107,14 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     // Pills (bet type, platform, sport, tags)
     pillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     pill: { borderRadius: 20, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: 'transparent' },
-    pillActive: { backgroundColor: '#2DC672', borderColor: '#2DC672' },
+    pillActive: { backgroundColor: colors.accent, borderColor: colors.accent },
     pillText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
     pillTextActive: { color: '#FFFFFF' },
 
     // Odds format toggle
     oddsFormatRow: { flexDirection: 'row', gap: 4 },
     fmtPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-    fmtPillActive: { backgroundColor: '#2DC672' },
+    fmtPillActive: { backgroundColor: colors.accent },
     fmtText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
     fmtTextActive: { color: '#FFFFFF' },
 
@@ -1087,18 +1124,18 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     // Tab bar
     tabBar: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, backgroundColor: colors.chipBg, borderRadius: 12, padding: 3 },
     tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-    tabActive: { backgroundColor: '#2DC672' },
+    tabActive: { backgroundColor: colors.accent },
     tabText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
     tabTextActive: { color: '#FFFFFF', fontWeight: '700' },
 
     // Navigation buttons
     navRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: 20, marginTop: 4, gap: 12 },
-    navBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#2DC672', borderRadius: 14, paddingVertical: 16 },
+    navBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 16 },
     navBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
     navSpacer: { flex: 1 },
 
     // Save button
-    saveBtn: { flex: 1, backgroundColor: '#2DC672', borderRadius: 14, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
+    saveBtn: { flex: 1, backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
     saveBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
 
     // Parlay
@@ -1109,8 +1146,8 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     legInput: { height: 44, marginBottom: 8 },
     legStatusRow: { flexDirection: 'row', gap: 6 },
     legStatusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: 'transparent' },
-    legStatusPending: { borderColor: '#2DC672' },
-    legStatusWon: { backgroundColor: '#2DC672', borderColor: '#2DC672' },
+    legStatusPending: { borderColor: colors.accent },
+    legStatusWon: { backgroundColor: colors.accent, borderColor: colors.accent },
     legStatusLost: { backgroundColor: '#E85D5D', borderColor: '#E85D5D' },
     legStatusText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
     legStatusTextActive: { color: '#FFFFFF' },
@@ -1138,7 +1175,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     webBtnRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
     webCancelBtn: { flex: 1, backgroundColor: colors.input, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
     webCancelText: { fontSize: 15, fontWeight: '600', color: colors.text },
-    webConfirmBtn: { flex: 1, backgroundColor: '#10B981', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+    webConfirmBtn: { flex: 1, backgroundColor: colors.accent, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
     webConfirmText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
 
     // Bottom sheet
@@ -1159,7 +1196,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     emptyText: { fontSize: 15, color: colors.textTertiary },
     chipsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10, marginBottom: 8 },
     chip: { backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 16, height: 42, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', minWidth: '45%' as any, flexGrow: 1, flexBasis: '45%' as any },
-    chipSelected: { backgroundColor: '#10B981' },
+    chipSelected: { backgroundColor: colors.accent },
     chipText: { fontSize: 14, fontWeight: '500', color: colors.text },
     chipTextSelected: { color: '#FFFFFF', fontWeight: '600' },
     moreSportsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, marginTop: 8, borderTopWidth: 1, borderTopColor: colors.input },

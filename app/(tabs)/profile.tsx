@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { getCurrencySymbol } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
+import TabScreenTransition from '@/components/TabScreenTransition';
 import * as Haptics from 'expo-haptics';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
@@ -96,7 +97,7 @@ export default function ProfileScreen() {
     await signOut();
   };
 
-  const profitColor = profit === null || profit >= 0 ? '#10B981' : '#E85D5D';
+  const profitColor = profit === null || profit >= 0 ? colors.accent : '#E85D5D';
 
   const menuItems = [
     { icon: 'person-outline', title: 'Account Settings', description: 'Manage Your Profile', route: '/account-settings' },
@@ -108,6 +109,7 @@ export default function ProfileScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   return (
+    <TabScreenTransition>
     <SafeAreaView style={styles.container}>
       <StatusBar style={colors.statusBar} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -194,8 +196,9 @@ export default function ProfileScreen() {
             <Switch
               value={isDark}
               onValueChange={toggleTheme}
-              trackColor={{ false: '#D1D5DB', true: '#1A1A2E' }}
+              trackColor={{ false: '#1A1A1A', true: colors.accent }}
               thumbColor="#FFFFFF"
+              ios_backgroundColor="#1A1A1A"
             />
           </View>
         </FadeInView>
@@ -237,6 +240,7 @@ export default function ProfileScreen() {
         </FadeInView>
       </ScrollView>
     </SafeAreaView>
+    </TabScreenTransition>
   );
 }
 

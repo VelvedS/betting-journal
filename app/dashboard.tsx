@@ -84,8 +84,8 @@ const sampleBets = [
     potential: 425,
     roi: 750,
     timestamp: 'Today, 3:45 PM',
-    statusColor: '#059669',
-    statusBg: '#D1FAE5',
+    statusColor: '#2DC672',
+    statusBg: 'rgba(45, 198, 114, 0.12)',
     icon: 'checkmark-circle',
   },
   {
@@ -146,7 +146,7 @@ export default function DashboardScreen() {
           <View style={styles.profitValueRow}>
             <Text style={styles.profitValue}>$ +2,450</Text>
             <View style={styles.percentageContainer}>
-              <Ionicons name="trending-up" size={20} color="#10B981" />
+              <Ionicons name="trending-up" size={20} color="#2DC672" />
               <Text style={styles.percentageText}>+245.0%</Text>
             </View>
           </View>
@@ -415,7 +415,7 @@ function PerformanceChart({ data, hoveredPoint, setHoveredPoint, period }: Perfo
         {/* Invisible touch targets + tooltips */}
         {points.map((point, index) => {
           const isPositive = point.profit >= 0;
-          const profitColor = isPositive ? '#10B981' : '#DC2626';
+          const profitColor = isPositive ? '#2DC672' : '#DC2626';
           const profitText = isPositive ? `+$${point.profit}` : `-$${Math.abs(point.profit)}`;
 
           return (
@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
   profitValue: {
     fontSize: 36,
     fontWeight: '700',
-    color: '#10B981',
+    color: '#2DC672',
   },
   percentageContainer: {
     flexDirection: 'row',
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
   percentageText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#10B981',
+    color: '#2DC672',
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
   roiValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#10B981',
+    color: '#2DC672',
   },
   activityFooter: {
     flexDirection: 'row',

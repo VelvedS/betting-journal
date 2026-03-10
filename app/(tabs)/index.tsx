@@ -1,13 +1,20 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
-  Animated as RNAnimated,
   RefreshControl,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  interpolate,
+  withRepeat,
+  withTiming,
+  Easing,
+  Extrapolation,
+} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,14 +27,16 @@ import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
 import PerformanceCurve, { TimePeriod } from '@/components/PerformanceCurve';
+import SkeletonLoader from '@/components/SkeletonLoader';
+import SkeletonBetCard from '@/components/SkeletonBetCard';
+import TabScreenTransition from '@/components/TabScreenTransition';
 
 const getStatusConfig = (status: string) => {
   switch (status) {
-    case 'won': return { label: 'WIN', statusColor: '#2DC672', statusBg: '#E8F8F0', icon: 'checkmark-circle' };
+    case 'won': return { label: 'WIN', statusColor: '#2DC672', statusBg: 'rgba(45, 198, 114, 0.12)', icon: 'checkmark-circle' };
     case 'lost': return { label: 'LOSS', statusColor: '#E85D5D', statusBg: '#FFECEC', icon: 'close-circle' };
     case 'pending': return { label: 'PENDING', statusColor: '#F5A623', statusBg: '#FFF5E0', icon: 'time' };
     case 'void': return { label: 'VOID', statusColor: '#999999', statusBg: '#F0F0F0', icon: 'ban' };
@@ -87,6 +96,7 @@ export default function HomeScreen() {
   const [cursorPL, setCursorPL] = useState<number | null>(null);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
@@ -108,6 +118,7 @@ export default function HomeScreen() {
       .order('created_at', { ascending: false });
     if (allError) console.error('[Dashboard] allBets fetch error:', allError);
     setAllBets(all || []);
+    setLoading(false);
   }, [user]);
 
   useFocusEffect(
@@ -122,14 +133,6 @@ export default function HomeScreen() {
     await fetchDashboardData();
     setRefreshing(false);
   }, [fetchDashboardData]);
-
-  // Blurred header on scroll
-  const scrollY = useRef(new RNAnimated.Value(0)).current;
-  const headerBlurOpacity = scrollY.interpolate({
-    inputRange: [0, 20, 40],
-    outputRange: [0, 0, 1],
-    extrapolate: 'clamp',
-  });
 
   const hasBets = allBets.length > 0;
 
@@ -149,22 +152,30 @@ export default function HomeScreen() {
 
   const displayName = user?.user_metadata?.full_name?.split(' ')[0] || 'there';
 
-  // Animated gradient for profit card
-  const gradientAnim = useRef(new RNAnimated.Value(0)).current;
+  // Animated gradient for profit card (Reanimated)
+  const gradientProgress = useSharedValue(0);
+  const isProfit = displayProfit > 0;
+  const isLoss = displayProfit < 0;
   useEffect(() => {
-    if (displayProfit > 0) {
-      RNAnimated.loop(
-        RNAnimated.timing(gradientAnim, { toValue: 1, duration: 3000, useNativeDriver: false }),
-      ).start();
+    if (isProfit || isLoss) {
+      gradientProgress.value = 0;
+      gradientProgress.value = withRepeat(
+        withTiming(1, { duration: 4500, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true,
+      );
     } else {
-      gradientAnim.setValue(0);
+      gradientProgress.value = withTiming(0, { duration: 300 });
     }
-  }, [displayProfit > 0]);
+  }, [isProfit, isLoss]);
 
-  const gradientOpacity = gradientAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.15, 0.35, 0.15],
-  });
+  const gradientAStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(gradientProgress.value, [0, 0.5, 1], [0.55, 0.20, 0.55], Extrapolation.CLAMP),
+  }));
+
+  const gradientBStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(gradientProgress.value, [0, 0.5, 1], [0.20, 0.55, 0.20], Extrapolation.CLAMP),
+  }));
 
   // Live number ticker — reset on focus so it counts up each time
   const [tickerKey, setTickerKey] = useState(0);
@@ -175,15 +186,11 @@ export default function HomeScreen() {
   );
 
   return (
+    <TabScreenTransition>
     <SafeAreaView style={styles.container}>
       <StatusBar style={colors.statusBar} />
 
-      {/* Blurred header overlay */}
-      <RNAnimated.View style={[styles.blurHeader, { opacity: headerBlurOpacity }]} pointerEvents="none">
-        <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      </RNAnimated.View>
-
-      <ScrollView
+      <Animated.ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -194,10 +201,6 @@ export default function HomeScreen() {
             colors={[colors.chipActiveBg]}
           />
         }
-        onScroll={RNAnimated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
         scrollEventThrottle={16}
       >
         {/* Header Section */}
@@ -208,37 +211,118 @@ export default function HomeScreen() {
           </View>
         </FadeInView>
 
-        {/* Total Profit/Loss Card */}
-        <FadeInView delay={80} direction="bottom">
-          <View style={styles.profitCard}>
-            {displayProfit > 0 && (
-              <RNAnimated.View style={[StyleSheet.absoluteFill, { opacity: gradientOpacity, borderRadius: 16, overflow: 'hidden' }]}>
-                <LinearGradient
-                  colors={[colors.surface, '#0D2B1F']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-              </RNAnimated.View>
-            )}
-            <Text style={styles.profitLabel}>
-              {cursorPL !== null ? 'P&L AT POINT' : 'TOTAL PROFIT/LOSS'}
-            </Text>
-            <View style={styles.profitValueRow}>
-              {hasBets ? (
-                <>
+        {loading ? (
+          <>
+            {/* Skeleton profit card */}
+            <FadeInView delay={80} direction="bottom">
+              <View style={styles.profitCard}>
+                <SkeletonLoader width={140} height={12} borderRadius={6} />
+                <View style={{ marginTop: 12 }}>
+                  <SkeletonLoader width={180} height={36} borderRadius={8} />
+                </View>
+              </View>
+            </FadeInView>
+            {/* Skeleton bet cards */}
+            {[0, 1, 2].map((i) => (
+              <FadeInView key={i} delay={160 + i * 80} direction="bottom">
+                <SkeletonBetCard />
+              </FadeInView>
+            ))}
+          </>
+        ) : !hasBets ? (
+          <>
+            {/* Welcome Card */}
+            <FadeInView delay={80} direction="bottom">
+              <View style={styles.profitCard}>
+                <Text style={styles.welcomeTitle}>Welcome to Ledgr! 👋</Text>
+                <Text style={styles.welcomeSubtitle}>
+                  Upload your first betting slip to start tracking your performance.
+                </Text>
+              </View>
+            </FadeInView>
+
+            {/* Chart Placeholder */}
+            <FadeInView delay={160} direction="bottom">
+              <View style={styles.chartPlaceholder}>
+                <Text style={{ fontSize: 32 }}>📈</Text>
+                <Text style={styles.chartPlaceholderText}>
+                  Your performance curve will appear here
+                </Text>
+              </View>
+            </FadeInView>
+
+            {/* Upload CTA */}
+            <FadeInView delay={240} direction="bottom">
+              <AnimatedPressable
+                style={styles.uploadCtaCard}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/add-bet'); }}
+                scaleDown={0.97}
+              >
+                <View style={styles.uploadCtaIconCircle}>
+                  <Ionicons name="add" size={36} color={colors.buttonPrimaryText} />
+                </View>
+                <Text style={styles.uploadCtaTitle}>Upload Your First Bet</Text>
+                <Text style={styles.uploadCtaSubtitle}>
+                  Snap a photo of your betting slip or add one manually
+                </Text>
+              </AnimatedPressable>
+            </FadeInView>
+          </>
+        ) : (
+          <>
+            {/* Total Profit/Loss Card */}
+            <FadeInView delay={80} direction="bottom">
+              <View style={styles.profitCard}>
+                {(isProfit || isLoss) && (
+                  <>
+                    <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }, gradientAStyle]}>
+                      <LinearGradient
+                        colors={isDark
+                          ? (isProfit ? [colors.surface, '#0D2B1A'] : [colors.surface, '#2B0D0D'])
+                          : (isProfit ? ['transparent', 'rgba(45, 198, 114, 0.28)'] : ['transparent', 'rgba(232, 93, 93, 0.25)'])
+                        }
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                    </Animated.View>
+                    <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }, gradientBStyle]}>
+                      <LinearGradient
+                        colors={isDark
+                          ? (isProfit ? [colors.surface, '#0D2B1C'] : [colors.surface, '#2B1010'])
+                          : (isProfit ? ['transparent', 'rgba(45, 198, 114, 0.20)'] : ['transparent', 'rgba(232, 93, 93, 0.18)'])
+                        }
+                        start={{ x: 0.3, y: 0.2 }}
+                        end={{ x: 0.7, y: 0.8 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                    </Animated.View>
+                    {!isDark && (
+                      <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden', opacity: 0.5 }, gradientAStyle]}>
+                        <LinearGradient
+                          colors={isProfit ? ['transparent', 'rgba(45, 198, 114, 0.12)'] : ['transparent', 'rgba(232, 93, 93, 0.10)']}
+                          start={{ x: 0.5, y: 0.3 }}
+                          end={{ x: 0.9, y: 0.9 }}
+                          style={StyleSheet.absoluteFill}
+                        />
+                      </Animated.View>
+                    )}
+                  </>
+                )}
+                <Text style={styles.profitLabel}>
+                  {cursorPL !== null ? 'P&L AT POINT' : 'TOTAL PROFIT/LOSS'}
+                </Text>
+                <View style={styles.profitValueRow}>
                   {cursorPL !== null ? (
-                    // Plain text during cursor drag — no count-up flash
                     <Text
                       style={[
                         styles.profitValue,
-                        { color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' },
+                        { color: displayProfit >= 0 ? colors.accent : '#E85D5D' },
                       ]}
                     >
                       {formatCurrency(displayProfit, currency, showBalance)}
                     </Text>
                   ) : showBalance ? (
-                    // Animated count-up for period total
                     <AnimatedNumber
                       key={`${selectedPeriod}-${tickerKey}`}
                       value={Math.abs(displayProfit)}
@@ -246,10 +330,10 @@ export default function HomeScreen() {
                       decimals={0}
                       delay={0}
                       duration={1200}
-                      style={{ ...styles.profitValue, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}
+                      style={{ ...styles.profitValue, color: displayProfit >= 0 ? colors.accent : '#E85D5D' }}
                     />
                   ) : (
-                    <Text style={{ ...styles.profitValue, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}>
+                    <Text style={{ ...styles.profitValue, color: displayProfit >= 0 ? colors.accent : '#E85D5D' }}>
                       ••••
                     </Text>
                   )}
@@ -257,13 +341,13 @@ export default function HomeScreen() {
                     <Ionicons
                       name={displayProfit >= 0 ? 'trending-up' : 'trending-down'}
                       size={20}
-                      color={displayProfit >= 0 ? '#2DC672' : '#E85D5D'}
+                      color={displayProfit >= 0 ? colors.accent : '#E85D5D'}
                     />
                     {cursorPL !== null ? (
                       <Text
                         style={[
                           styles.percentageText,
-                          { color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' },
+                          { color: displayProfit >= 0 ? colors.accent : '#E85D5D' },
                         ]}
                       >
                         {showBalance ? formatROI(roiPct) : '••••'}
@@ -277,189 +361,165 @@ export default function HomeScreen() {
                         decimals={0}
                         delay={0}
                         duration={1200}
-                        style={{ ...styles.percentageText, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}
+                        style={{ ...styles.percentageText, color: displayProfit >= 0 ? colors.accent : '#E85D5D' }}
                       />
                     ) : (
-                      <Text style={{ ...styles.percentageText, color: displayProfit >= 0 ? '#2DC672' : '#E85D5D' }}>
+                      <Text style={{ ...styles.percentageText, color: displayProfit >= 0 ? colors.accent : '#E85D5D' }}>
                         ••••
                       </Text>
                     )}
                   </View>
-                </>
-              ) : (
-                <Text style={styles.profitValueEmpty}>{formatCurrency(0, currency, showBalance)}</Text>
-              )}
-            </View>
-          </View>
-        </FadeInView>
+                </View>
+              </View>
+            </FadeInView>
 
-        {/* Time Period Tabs */}
-        <FadeInView delay={160} direction="bottom">
-          <View style={styles.tabsContainer}>
-            {(['Daily', 'Weekly', 'Monthly', 'Lifetime'] as TimePeriod[]).map(
-              (period) => (
-                <AnimatedPressable
-                  key={period}
-                  style={[
-                    styles.tab,
-                    selectedPeriod === period && styles.tabActive,
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedPeriod(period);
-                    setCursorPL(null);
-                  }}
-                  scaleDown={0.93}
-                >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      selectedPeriod === period && styles.tabTextActive,
-                    ]}
-                  >
-                    {period}
-                  </Text>
-                </AnimatedPressable>
-              )
-            )}
-          </View>
-        </FadeInView>
+            {/* Time Period Tabs */}
+            <FadeInView delay={160} direction="bottom">
+              <View style={styles.tabsContainer}>
+                {(['Daily', 'Weekly', 'Monthly', 'Lifetime'] as TimePeriod[]).map(
+                  (period) => (
+                    <AnimatedPressable
+                      key={period}
+                      style={[
+                        styles.tab,
+                        selectedPeriod === period && styles.tabActive,
+                      ]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setSelectedPeriod(period);
+                        setCursorPL(null);
+                      }}
+                      scaleDown={0.93}
+                    >
+                      <Text
+                        style={[
+                          styles.tabText,
+                          selectedPeriod === period && styles.tabTextActive,
+                        ]}
+                      >
+                        {period}
+                      </Text>
+                    </AnimatedPressable>
+                  )
+                )}
+              </View>
+            </FadeInView>
 
-        {/* Performance Curve Card */}
-        <FadeInView delay={220} direction="bottom">
-          <View style={styles.chartCard}>
-            <Text style={styles.chartLabel}>PERFORMANCE CURVE</Text>
-            <PerformanceCurve
-              allBets={allBets}
-              period={selectedPeriod}
-              onCursorChange={setCursorPL}
-            />
-          </View>
-        </FadeInView>
+            {/* Performance Curve Card */}
+            <FadeInView delay={220} direction="bottom">
+              <View style={styles.chartCard}>
+                <Text style={styles.chartLabel}>PERFORMANCE CURVE</Text>
+                <PerformanceCurve
+                  allBets={allBets}
+                  period={selectedPeriod}
+                  onCursorChange={setCursorPL}
+                />
+              </View>
+            </FadeInView>
 
-        {/* Recent Activity Section */}
-        <View style={styles.activitySection}>
-          <FadeInView delay={300} direction="none">
-            <View style={styles.activityTitleRow}>
-              <Text style={styles.activityTitle}>Recent Activity</Text>
-              {hasBets && (
-                <AnimatedPressable
-                  style={styles.viewAllButton}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/stats'); }}
-                  scaleDown={0.93}
-                >
-                  <Text style={styles.viewAllText}>View All</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#2DC672" />
-                </AnimatedPressable>
-              )}
-            </View>
-          </FadeInView>
-
-          {hasBets ? (
-            recentBets.map((bet, index) => {
-              const sc = getStatusConfig(bet.status);
-              const roiPctValue = !bet.wager || bet.wager <= 0 ? 0
-                : bet.status === 'lost' ? -100
-                : bet.status === 'void' ? 0
-                : ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100;
-              const ts = bet.placed_at
-                ? new Date(bet.placed_at).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })
-                : '';
-              return (
-                <FadeInView key={bet.id} delay={360 + index * 80} direction="bottom">
+            {/* Recent Activity Section */}
+            <View style={styles.activitySection}>
+              <FadeInView delay={300} direction="none">
+                <View style={styles.activityTitleRow}>
+                  <Text style={styles.activityTitle}>Recent Activity</Text>
                   <AnimatedPressable
-                    style={styles.activityCard}
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/bet-details/${bet.id}`); }}
-                    scaleDown={0.98}
+                    style={styles.viewAllButton}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/stats'); }}
+                    scaleDown={0.93}
                   >
-                    <View style={styles.activityHeader}>
-                      <View style={styles.activityHeaderLeft}>
-                        <Text style={styles.platformName}>
-                          {bet.sportsbook || 'Unknown'}
-                        </Text>
-                        <View
-                          style={[styles.badge, { backgroundColor: sc.statusBg }]}
-                        >
-                          <Text
-                            style={[styles.badgeText, { color: sc.statusColor }]}
+                    <Text style={styles.viewAllText}>View All</Text>
+                    <Ionicons name="arrow-forward" size={16} color={colors.accent} />
+                  </AnimatedPressable>
+                </View>
+              </FadeInView>
+
+              {recentBets.map((bet, index) => {
+                const sc = getStatusConfig(bet.status);
+                const roiPctValue = !bet.wager || bet.wager <= 0 ? 0
+                  : bet.status === 'lost' ? -100
+                  : bet.status === 'void' ? 0
+                  : ((bet.potential_payout || 0) - bet.wager) / bet.wager * 100;
+                const ts = bet.placed_at
+                  ? new Date(bet.placed_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })
+                  : '';
+                return (
+                  <FadeInView key={bet.id} delay={360 + index * 80} direction="bottom">
+                    <AnimatedPressable
+                      style={styles.activityCard}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/bet-details/${bet.id}`); }}
+                      scaleDown={0.98}
+                    >
+                      <View style={styles.activityHeader}>
+                        <View style={styles.activityHeaderLeft}>
+                          <Text style={styles.platformName}>
+                            {bet.sportsbook || 'Unknown'}
+                          </Text>
+                          <View
+                            style={[styles.badge, { backgroundColor: sc.statusBg }]}
                           >
-                            {sc.label}
+                            <Text
+                              style={[styles.badgeText, { color: sc.statusColor }]}
+                            >
+                              {sc.label}
+                            </Text>
+                          </View>
+                        </View>
+                        <Ionicons
+                          name={sc.icon as any}
+                          size={24}
+                          color={sc.statusColor}
+                        />
+                      </View>
+                      <Text style={styles.betType}>
+                        {bet.bet_type
+                          ? bet.bet_type === 'over_under'
+                            ? 'Over/Under'
+                            : bet.bet_type.charAt(0).toUpperCase() +
+                              bet.bet_type.slice(1)
+                          : ''}
+                      </Text>
+                      <View style={styles.statsRow}>
+                        <View style={styles.statItem}>
+                          <Text style={styles.statLabel}>WAGER</Text>
+                          <Text style={styles.statValue}>
+                            {formatCurrency(bet.wager, currency, showBalance)}
+                          </Text>
+                        </View>
+                        <View style={styles.statItem}>
+                          <Text style={styles.statLabel}>POTENTIAL</Text>
+                          <Text style={styles.statValue}>
+                            {formatCurrency(bet.potential_payout || 0, currency, showBalance)}
+                          </Text>
+                        </View>
+                        <View style={styles.statItem}>
+                          <Text style={styles.statLabel}>ROI</Text>
+                          <Text style={[styles.roiValue, { color: roiPctValue < 0 ? '#E85D5D' : colors.accent }]}>
+                            {showBalance ? formatROI(roiPctValue) : '••••'}
                           </Text>
                         </View>
                       </View>
-                      <Ionicons
-                        name={sc.icon as any}
-                        size={24}
-                        color={sc.statusColor}
-                      />
-                    </View>
-                    <Text style={styles.betType}>
-                      {bet.bet_type
-                        ? bet.bet_type === 'over_under'
-                          ? 'Over/Under'
-                          : bet.bet_type.charAt(0).toUpperCase() +
-                            bet.bet_type.slice(1)
-                        : ''}
-                    </Text>
-                    <View style={styles.statsRow}>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>WAGER</Text>
-                        <Text style={styles.statValue}>
-                          {formatCurrency(bet.wager, currency, showBalance)}
+                      <View style={styles.activityFooter}>
+                        <Text style={styles.timestamp}>{ts}</Text>
+                        <Text style={styles.betId}>
+                          #{String(bet.id).slice(-4)}
                         </Text>
                       </View>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>POTENTIAL</Text>
-                        <Text style={styles.statValue}>
-                          {formatCurrency(bet.potential_payout || 0, currency, showBalance)}
-                        </Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>ROI</Text>
-                        <Text style={[styles.roiValue, { color: roiPctValue < 0 ? '#E85D5D' : '#10B981' }]}>
-                          {showBalance ? formatROI(roiPctValue) : '••••'}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.activityFooter}>
-                      <Text style={styles.timestamp}>{ts}</Text>
-                      <Text style={styles.betId}>
-                        #{String(bet.id).slice(-4)}
-                      </Text>
-                    </View>
-                  </AnimatedPressable>
-                </FadeInView>
-              );
-            })
-          ) : (
-            <FadeInView delay={360} direction="bottom">
-              <View style={styles.emptyStateCard}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons name="receipt-outline" size={36} color="#6366F1" />
-                </View>
-                <Text style={styles.emptyTitle}>No bets yet</Text>
-                <Text style={styles.emptySubtitle}>
-                  Start tracking your bets to see your performance
-                </Text>
-                <AnimatedPressable
-                  style={styles.emptyButton}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/add-bet'); }}
-                  scaleDown={0.97}
-                >
-                  <Text style={styles.emptyButtonText}>Add Your First Bet</Text>
-                </AnimatedPressable>
-              </View>
-            </FadeInView>
-          )}
-        </View>
-      </ScrollView>
+                    </AnimatedPressable>
+                  </FadeInView>
+                );
+              })}
+            </View>
+          </>
+        )}
+      </Animated.ScrollView>
     </SafeAreaView>
+    </TabScreenTransition>
   );
 }
 
@@ -468,14 +528,6 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  blurHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 100,
-    zIndex: 10,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -519,7 +571,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   profitValue: {
     fontSize: 36,
     fontWeight: '700',
-    color: '#10B981',
+    color: colors.accent,
   },
   profitValueEmpty: {
     fontSize: 36,
@@ -534,7 +586,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   percentageText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#10B981',
+    color: colors.accent,
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -660,7 +712,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   roiValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#10B981',
+    color: colors.accent,
   },
   activityFooter: {
     flexDirection: 'row',
@@ -706,7 +758,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     marginBottom: 24,
   },
   emptyButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.accent,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 32,
@@ -715,6 +767,65 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // ── Empty state (0 bets) ──────────
+  welcomeTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  welcomeSubtitle: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    lineHeight: 22,
+  },
+  chartPlaceholder: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 40,
+    marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  chartPlaceholderText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  uploadCtaCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.05)',
+    elevation: 3,
+  },
+  uploadCtaIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.buttonPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  uploadCtaTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 6,
+  },
+  uploadCtaSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   });
 }

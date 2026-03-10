@@ -38,8 +38,8 @@ const allBets: BetData[] = [
     potential: 425,
     roi: 750,
     date: 'Jan 25, 3:45 PM',
-    statusColor: '#10B981',
-    statusBg: '#D1FAE5',
+    statusColor: '#2DC672',
+    statusBg: 'rgba(45, 198, 114, 0.12)',
     iconName: 'checkmark-circle',
   },
   {
@@ -77,8 +77,8 @@ const allBets: BetData[] = [
     potential: 142.5,
     roi: 90,
     date: 'Jan 23, 6:15 PM',
-    statusColor: '#10B981',
-    statusBg: '#D1FAE5',
+    statusColor: '#2DC672',
+    statusBg: 'rgba(45, 198, 114, 0.12)',
     iconName: 'checkmark-circle',
   },
   {
@@ -103,8 +103,8 @@ const allBets: BetData[] = [
     potential: 114,
     roi: 90,
     date: 'Dec 28, 2:30 PM',
-    statusColor: '#10B981',
-    statusBg: '#D1FAE5',
+    statusColor: '#2DC672',
+    statusBg: 'rgba(45, 198, 114, 0.12)',
     iconName: 'checkmark-circle',
   },
   {
@@ -116,8 +116,8 @@ const allBets: BetData[] = [
     potential: 161.5,
     roi: 90,
     date: 'Dec 25, 7:45 PM',
-    statusColor: '#10B981',
-    statusBg: '#D1FAE5',
+    statusColor: '#2DC672',
+    statusBg: 'rgba(45, 198, 114, 0.12)',
     iconName: 'checkmark-circle',
   },
   {
@@ -185,7 +185,7 @@ export default function StatsScreen() {
 
   // Color helpers
   const getValueColor = (value: number) => {
-    if (value > 0) return '#10B981';
+    if (value > 0) return '#2DC672';
     if (value < 0) return '#EF4444';
     return '#1A1A1A';
   };
@@ -236,7 +236,7 @@ export default function StatsScreen() {
           {/* Wins Card */}
           <View style={styles.summaryCard}>
             <View style={styles.iconContainer}>
-              <Ionicons name="trending-up" size={20} color="#10B981" />
+              <Ionicons name="trending-up" size={20} color="#2DC672" />
             </View>
             <Text style={styles.summaryLabel}>WINS</Text>
             <Text style={styles.summaryValue}>{wins}</Text>
@@ -268,7 +268,7 @@ export default function StatsScreen() {
           {/* Wagered Card */}
           <View style={styles.summaryCard}>
             <View style={styles.iconContainer}>
-              <Ionicons name="cash-outline" size={20} color="#10B981" />
+              <Ionicons name="cash-outline" size={20} color="#2DC672" />
             </View>
             <Text style={styles.summaryLabel}>WAGERED</Text>
             <Text style={styles.summaryValue}>${totalWagered}</Text>
@@ -277,7 +277,7 @@ export default function StatsScreen() {
           {/* Win Rate Card */}
           <View style={styles.summaryCard}>
             <View style={styles.iconContainer}>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#10B981" />
+              <Ionicons name="checkmark-circle-outline" size={20} color="#2DC672" />
             </View>
             <Text style={styles.summaryLabel}>WIN RATE</Text>
             <Text style={styles.summaryValue}>{winRate}%</Text>
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
   roiValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#10B981',
+    color: '#2DC672',
   },
   betFooter: {
     flexDirection: 'row',

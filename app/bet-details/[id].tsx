@@ -28,6 +28,7 @@ import FadeInView from '@/components/FadeInView';
 import { useTheme } from '@/context/ThemeContext';
 import * as Haptics from 'expo-haptics';
 import ConfettiCannon from 'react-native-confetti-cannon';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Dimensions } from 'react-native';
 import { usePreferences } from '@/context/PreferencesContext';
 import { formatCurrency, formatROI, formatOdds } from '@/lib/formatters';
@@ -38,7 +39,7 @@ type ToastState = { message: string; type: 'error' } | null;
 const getLegStatusStyle = (status: string) => {
   switch (status) {
     case 'won':
-      return { pillBg: '#E8F5E9', pillText: '#00C853' };
+      return { pillBg: 'rgba(45, 198, 114, 0.12)', pillText: '#2DC672' };
     case 'lost':
       return { pillBg: '#FFEBEE', pillText: '#FF3B30' };
     default:
@@ -50,10 +51,10 @@ const getStatusStyling = (status: string) => {
   switch (status) {
     case 'won':
       return {
-        bgColor: '#E8F8F0',
+        bgColor: 'rgba(45, 198, 114, 0.12)',
         textColor: '#2DC672',
         iconName: 'trending-up' as const,
-        iconBg: '#C6F0DC',
+        iconBg: 'rgba(45, 198, 114, 0.25)',
         label: 'Win',
       };
     case 'lost':
@@ -130,6 +131,7 @@ export default function BetDetailsScreen() {
   const { id } = useLocalSearchParams();
   const [bet, setBet] = useState<any>(null);
   const [parlayLegs, setParlayLegs] = useState<any[]>([]);
+  const [betTags, setBetTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showStatusUpdate, setShowStatusUpdate] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -138,6 +140,7 @@ export default function BetDetailsScreen() {
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const confettiRef = useRef<any>(null);
+  const hasShownConfetti = useRef(false);
   const { width } = Dimensions.get('window');
 
   const { colors } = useTheme();
@@ -151,6 +154,23 @@ export default function BetDetailsScreen() {
   const pendingPulseStyle = useAnimatedStyle(() => ({
     opacity: pendingPulseOpacity.value,
   }));
+
+  // Fire confetti on first-ever view of a won bet (persisted via AsyncStorage)
+  useEffect(() => {
+    if (bet?.status === 'won' && !loading && !hasShownConfetti.current) {
+      const key = `confetti_shown_${bet.id}`;
+      AsyncStorage.getItem(key).then((shown) => {
+        if (shown || hasShownConfetti.current) return;
+        hasShownConfetti.current = true;
+        AsyncStorage.setItem(key, 'true');
+        const timer = setTimeout(() => {
+          confettiRef.current?.start();
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        }, 400);
+        return () => clearTimeout(timer);
+      });
+    }
+  }, [bet?.status, loading]);
 
   useEffect(() => {
     if (bet?.status === 'pending') {
@@ -167,12 +187,14 @@ export default function BetDetailsScreen() {
 
   const fetchBet = useCallback(async () => {
     if (!betId) return;
-    const [betResult, legsResult] = await Promise.all([
+    const [betResult, legsResult, tagsResult] = await Promise.all([
       supabase.from('bets').select('*').eq('id', betId).single(),
       supabase.from('parlay_legs').select('*').eq('bet_id', betId).order('order', { ascending: true }),
+      supabase.from('bet_tags').select('tag').eq('bet_id', betId),
     ]);
     if (betResult.data) setBet(betResult.data);
     if (legsResult.data) setParlayLegs(legsResult.data);
+    if (tagsResult.data) setBetTags(tagsResult.data.map((t: any) => t.tag));
     setLoading(false);
   }, [betId]);
 
@@ -232,12 +254,15 @@ export default function BetDetailsScreen() {
       console.error('Failed to update status:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'Failed to update status. Please try again.');
+      setUpdatingStatus(false);
     } else {
       setBet({ ...bet, status: newStatus });
       setShowStatusUpdate(false);
+
       if (newStatus === 'won') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         confettiRef.current?.start();
+        AsyncStorage.setItem(`confetti_shown_${bet.id}`, 'true');
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
@@ -252,8 +277,9 @@ export default function BetDetailsScreen() {
           body: { user_id: user.id, title: notifTitle, body: notifBody, data: { type: 'betResults' } },
         }).catch((err) => console.error('[Push] Failed to send bet result notification:', err));
       }
+
+      setUpdatingStatus(false);
     }
-    setUpdatingStatus(false);
   };
 
   // Skeleton shimmer animation
@@ -404,7 +430,7 @@ export default function BetDetailsScreen() {
           <View style={styles.infoCard}>
             <View style={styles.sportsbookHeader}>
               <View style={styles.sportsbookIcon}>
-                <Ionicons name="logo-usd" size={22} color="#10B981" />
+                <Ionicons name="logo-usd" size={22} color={colors.accent} />
               </View>
               <View style={styles.sportsbookInfo}>
                 <Text style={styles.sportsbookName}>{bet.sportsbook || 'Unknown'}</Text>
@@ -425,7 +451,7 @@ export default function BetDetailsScreen() {
               </View>
               <View style={[styles.statColumn, styles.statColumnRight]}>
                 <Text style={styles.statLabel}>ROI</Text>
-                <Text style={[styles.roiValue, { color: roiPctNum < 0 ? '#E85D5D' : '#10B981' }]}>{formatROI(roiPctNum)}</Text>
+                <Text style={[styles.roiValue, { color: roiPctNum < 0 ? '#E85D5D' : colors.accent }]}>{formatROI(roiPctNum)}</Text>
               </View>
             </View>
           </View>
@@ -490,6 +516,42 @@ export default function BetDetailsScreen() {
           </FadeInView>
         ) : null}
 
+        {/* Edit Bet */}
+        <FadeInView delay={420} direction="bottom">
+          <AnimatedPressable
+            style={styles.editButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              const betData: Record<string, string> = {
+                platform: bet.sportsbook || '',
+                bet_type: bet.bet_type || '',
+                sport: bet.sport || '',
+                matchup: bet.matchup || '',
+                description: bet.description || '',
+                odds: bet.odds || '',
+                odds_format: bet.odds_format || '',
+                wager: String(bet.wager || ''),
+                potential_payout: String(bet.potential_payout || ''),
+                status: bet.status || '',
+                date: bet.placed_at || '',
+                notes: bet.notes || '',
+                tags: JSON.stringify(betTags),
+                ticket_image_url: bet.ticket_image_url || '',
+                id: bet.id,
+                isEditing: 'true',
+              };
+              if (parlayLegs.length > 0) {
+                betData.parlay_legs = JSON.stringify(parlayLegs);
+              }
+              router.push({ pathname: '/manual-add-bet', params: betData });
+            }}
+            scaleDown={0.96}
+          >
+            <Ionicons name="create-outline" size={20} color={colors.accent} />
+            <Text style={styles.editButtonText}>Edit Bet</Text>
+          </AnimatedPressable>
+        </FadeInView>
+
         {/* Delete Bet */}
         <FadeInView delay={440} direction="bottom">
           <AnimatedPressable
@@ -520,11 +582,13 @@ export default function BetDetailsScreen() {
       {/* Confetti on Won */}
       <ConfettiCannon
         ref={confettiRef}
-        count={80}
-        origin={{ x: width / 2, y: -20 }}
+        count={90}
+        origin={{ x: width / 2, y: -10 }}
         fadeOut
         autoStart={false}
-        colors={['#10B981', '#34D399', '#6EE7B7', '#ffffff']}
+        explosionSpeed={300}
+        fallSpeed={2500}
+        colors={['#2DC672', '#FFD700', '#FFFFFF', '#2DC672', '#FCD34D']}
       />
     </SafeAreaView>
   );
@@ -658,7 +722,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       width: 48,
       height: 48,
       borderRadius: 24,
-      backgroundColor: '#E8F8F0',
+      backgroundColor: colors.accentBg,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -705,7 +769,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     roiValue: {
       fontSize: 18,
       fontWeight: '700',
-      color: '#10B981',
+      color: colors.accent,
     },
     notesCard: {
       backgroundColor: colors.surface,
@@ -793,6 +857,23 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       fontSize: 13,
       fontWeight: '600',
     },
+    editButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.accent,
+      height: 50,
+      marginBottom: 12,
+    },
+    editButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.accent,
+    },
     deleteButton: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -802,7 +883,6 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       borderWidth: 1,
       borderColor: '#E85D5D',
       paddingVertical: 14,
-      marginTop: 4,
     },
     deleteButtonDisabled: {
       opacity: 0.5,

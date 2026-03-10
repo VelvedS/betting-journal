@@ -24,30 +24,48 @@
  * ──────────────────────────────────────────────
  */
 
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   SafeAreaView,
-  Animated,
   RefreshControl,
+  Dimensions,
+  TouchableWithoutFeedback,
+  Modal,
 } from 'react-native';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withRepeat,
+  runOnJS,
+} from 'react-native-reanimated';
+import {
+  GestureDetector,
+  Gesture,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import TabScreenTransition from '@/components/TabScreenTransition';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ThemeColors } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import AnimatedPressable from '@/components/AnimatedPressable';
-import { BlurView } from 'expo-blur';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
 import { formatROI, getCurrencySymbol } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
 import * as Haptics from 'expo-haptics';
+import SkeletonLoader from '@/components/SkeletonLoader';
+import SkeletonCard from '@/components/SkeletonCard';
 
 // ──────────────────────────────────────
 // Types
@@ -61,6 +79,8 @@ interface Bet {
   status: string;
   bet_type: string | null;
   sport: string | null;
+  sportsbook: string | null;
+  matchup: string | null;
   wager: number;
   potential_payout: number;
   placed_at: string | null;
@@ -113,7 +133,7 @@ interface BadgeDef {
   emoji: string;
   name: string;
   description: string;
-  category: 'activity' | 'performance';
+  category: 'activity' | 'roi' | 'diversity' | 'performance';
   check: (bets: Bet[], unlocked: Set<string>) => boolean;
   progress: (bets: Bet[]) => { current: number; target: number };
 }
@@ -124,7 +144,7 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
     id: 'first_bet',
     emoji: '🏆',
     name: 'First Bet',
-    description: 'Upload your first bet',
+    description: 'Uploaded your first bet to Ledgr',
     category: 'activity',
     check: (bets) => bets.length >= 1,
     progress: (bets) => ({ current: Math.min(bets.length, 1), target: 1 }),
@@ -133,7 +153,7 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
     id: 'ten_bets',
     emoji: '📈',
     name: 'Getting Started',
-    description: '10 bets uploaded',
+    description: 'Tracked 10 bets — building the habit',
     category: 'activity',
     check: (bets) => bets.length >= 10,
     progress: (bets) => ({ current: Math.min(bets.length, 10), target: 10 }),
@@ -142,7 +162,7 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
     id: 'fifty_bets',
     emoji: '⚡',
     name: 'Committed',
-    description: '50 bets uploaded',
+    description: '50 bets tracked — you\'re committed',
     category: 'activity',
     check: (bets) => bets.length >= 50,
     progress: (bets) => ({ current: Math.min(bets.length, 50), target: 50 }),
@@ -151,35 +171,262 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
     id: 'century',
     emoji: '🏆',
     name: 'Century Club',
-    description: '100 bets uploaded',
+    description: '100 bets in the books',
     category: 'activity',
     check: (bets) => bets.length >= 100,
     progress: (bets) => ({ current: Math.min(bets.length, 100), target: 100 }),
   },
   {
+    id: 'five_hundred_bets',
+    emoji: '📊',
+    name: 'High Volume',
+    description: '500 bets tracked — you\'re a machine',
+    category: 'activity',
+    check: (bets) => bets.length >= 500,
+    progress: (bets) => ({ current: Math.min(bets.length, 500), target: 500 }),
+  },
+  {
     id: 'on_a_roll',
     emoji: '🔥',
     name: 'On a Roll',
-    description: '7 day upload streak',
+    description: 'Uploaded bets 7 days in a row',
     category: 'activity',
     check: (bets) => calcUploadStreak(bets) >= 7,
     progress: (bets) => ({ current: Math.min(calcUploadStreak(bets), 7), target: 7 }),
   },
   {
+    id: 'dedicated_tracker',
+    emoji: '📅',
+    name: 'Dedicated Tracker',
+    description: 'Uploaded bets 30 days in a row',
+    category: 'activity',
+    check: (bets) => calcUploadStreak(bets) >= 30,
+    progress: (bets) => ({ current: Math.min(calcUploadStreak(bets), 30), target: 30 }),
+  },
+  {
     id: 'sharp_eye',
     emoji: '👁️',
     name: 'Sharp Eye',
-    description: '5 bets in one day',
+    description: 'Logged 5 bets in a single day',
     category: 'activity',
     check: (bets) => calcMaxBetsInDay(bets) >= 5,
     progress: (bets) => ({ current: Math.min(calcMaxBetsInDay(bets), 5), target: 5 }),
+  },
+  // ROI
+  {
+    id: 'in_the_green',
+    emoji: '🌱',
+    name: 'In the Green',
+    description: 'Your overall ROI went positive for the first time',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) > 0;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      const roi = calcOverallROI(bets);
+      return { current: roi > 0 ? 1 : 0, target: 1 };
+    },
+  },
+  {
+    id: 'quarter_turn',
+    emoji: '🔄',
+    name: 'Quarter Turn',
+    description: 'Reached 25% ROI over 10+ settled bets',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) >= 25;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      return { current: Math.min(Math.max(calcOverallROI(bets), 0), 25), target: 25 };
+    },
+  },
+  {
+    id: 'half_sharp',
+    emoji: '🔪',
+    name: 'Half Sharp',
+    description: 'Reached 50% ROI over 10+ settled bets',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) >= 50;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      return { current: Math.min(Math.max(calcOverallROI(bets), 0), 50), target: 50 };
+    },
+  },
+  {
+    id: 'the_edge',
+    emoji: '⚡',
+    name: 'The Edge',
+    description: 'Reached 75% ROI over 10+ settled bets',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) >= 75;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      return { current: Math.min(Math.max(calcOverallROI(bets), 0), 75), target: 75 };
+    },
+  },
+  {
+    id: 'double_up',
+    emoji: '💰',
+    name: 'Double Up',
+    description: 'Doubled your money — 100% ROI',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) >= 100;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      return { current: Math.min(Math.max(calcOverallROI(bets), 0), 100), target: 100 };
+    },
+  },
+  {
+    id: 'triple_threat',
+    emoji: '🎯',
+    name: 'Triple Threat',
+    description: 'Tripled your money — 200% ROI',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) >= 200;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      return { current: Math.min(Math.max(calcOverallROI(bets), 0), 200), target: 200 };
+    },
+  },
+  {
+    id: 'four_bagger',
+    emoji: '🎒',
+    name: 'Four Bagger',
+    description: '4x return on your bankroll',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) >= 300;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      return { current: Math.min(Math.max(calcOverallROI(bets), 0), 300), target: 300 };
+    },
+  },
+  {
+    id: 'high_roller',
+    emoji: '🎲',
+    name: 'High Roller',
+    description: '5x return — you\'re printing money',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) >= 500;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      return { current: Math.min(Math.max(calcOverallROI(bets), 0), 500), target: 500 };
+    },
+  },
+  {
+    id: 'whale_watch',
+    emoji: '🐋',
+    name: 'Whale Watch',
+    description: '750% ROI — legendary territory',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) >= 750;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      return { current: Math.min(Math.max(calcOverallROI(bets), 0), 750), target: 750 };
+    },
+  },
+  {
+    id: 'diamond_hands',
+    emoji: '💎',
+    name: 'Diamond Hands',
+    description: '10x your bankroll — untouchable',
+    category: 'roi',
+    check: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return false;
+      return calcOverallROI(bets) >= 1000;
+    },
+    progress: (bets) => {
+      const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+      if (settled.length < 10) return { current: settled.length, target: 10 };
+      return { current: Math.min(Math.max(calcOverallROI(bets), 0), 1000), target: 1000 };
+    },
+  },
+  // Diversity
+  {
+    id: 'whale',
+    emoji: '🐳',
+    name: 'Whale',
+    description: 'Tracked $1,000+ in total wagers',
+    category: 'diversity',
+    check: (bets) => bets.reduce((s, b) => s + (b.wager || 0), 0) >= 1000,
+    progress: (bets) => {
+      const total = bets.reduce((s, b) => s + (b.wager || 0), 0);
+      return { current: Math.min(total, 1000), target: 1000 };
+    },
+  },
+  {
+    id: 'well_rounded',
+    emoji: '🌐',
+    name: 'Well Rounded',
+    description: 'Logged bets on 5 different sportsbooks',
+    category: 'diversity',
+    check: (bets) => new Set(bets.map((b) => b.sportsbook).filter(Boolean)).size >= 5,
+    progress: (bets) => {
+      const count = new Set(bets.map((b) => b.sportsbook).filter(Boolean)).size;
+      return { current: Math.min(count, 5), target: 5 };
+    },
+  },
+  {
+    id: 'multi_sport',
+    emoji: '🏟️',
+    name: 'Multi-Sport',
+    description: 'Logged bets across 5 different sports',
+    category: 'diversity',
+    check: (bets) => new Set(bets.map((b) => b.sport).filter(Boolean)).size >= 5,
+    progress: (bets) => {
+      const count = new Set(bets.map((b) => b.sport).filter(Boolean)).size;
+      return { current: Math.min(count, 5), target: 5 };
+    },
   },
   // Performance
   {
     id: 'first_win',
     emoji: '🎯',
     name: 'First Win',
-    description: 'Win your first bet',
+    description: 'Won your very first bet',
     category: 'performance',
     check: (bets) => bets.some((b) => b.status === 'won'),
     progress: (bets) => ({
@@ -191,7 +438,7 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
     id: 'hot_streak',
     emoji: '🔥',
     name: 'Hot Streak',
-    description: '5 wins in a row',
+    description: 'Hit 5 wins in a row',
     category: 'performance',
     check: (bets) => calcMaxConsecutiveWins(bets) >= 5,
     progress: (bets) => ({
@@ -203,7 +450,7 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
     id: 'iceman',
     emoji: '❄️',
     name: 'Iceman',
-    description: 'Win after 5 consecutive losses',
+    description: 'Won after 5 straight losses — ice in your veins',
     category: 'performance',
     check: (bets) => checkIceman(bets),
     progress: (bets) => ({
@@ -212,34 +459,10 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
     }),
   },
   {
-    id: 'profit_zone',
-    emoji: '📈',
-    name: 'Profit Zone',
-    description: 'Overall ROI goes positive',
-    category: 'performance',
-    check: (bets) => calcOverallROI(bets) > 0,
-    progress: (bets) => ({
-      current: calcOverallROI(bets) > 0 ? 1 : 0,
-      target: 1,
-    }),
-  },
-  {
-    id: 'double_up',
-    emoji: '⚡',
-    name: 'Double Up',
-    description: '100% ROI milestone',
-    category: 'performance',
-    check: (bets) => calcOverallROI(bets) >= 100,
-    progress: (bets) => ({
-      current: Math.min(Math.max(calcOverallROI(bets), 0), 100),
-      target: 100,
-    }),
-  },
-  {
     id: 'sharp',
     emoji: '🎯',
     name: 'Sharp',
-    description: '55%+ win rate over 50+ bets',
+    description: '55%+ win rate over 50+ bets — certified sharp',
     category: 'performance',
     check: (bets) => {
       const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
@@ -255,7 +478,7 @@ const BADGE_DEFINITIONS: BadgeDef[] = [
     id: 'underdog_hunter',
     emoji: '🏆',
     name: 'Underdog Hunter',
-    description: '60%+ win rate at +150 or longer',
+    description: '60%+ win rate on +150 odds or longer',
     category: 'performance',
     check: (bets) => {
       const underdogs = bets.filter((b) => b.odds != null && b.odds >= 150);
@@ -447,6 +670,373 @@ function buildDayOfWeek(bets: Bet[]): DayStats[] {
 }
 
 // ──────────────────────────────────────
+// Personal Records helpers
+// ──────────────────────────────────────
+
+function calcBiggestWin(bets: Bet[]): { profit: number; matchup: string; date: string } | null {
+  const wins = bets.filter((b) => b.status === 'won');
+  if (wins.length === 0) return null;
+  let best = wins[0];
+  let bestProfit = (best.potential_payout || 0) - (best.wager || 0);
+  wins.forEach((b) => {
+    const profit = (b.potential_payout || 0) - (b.wager || 0);
+    if (profit > bestProfit) { bestProfit = profit; best = b; }
+  });
+  return { profit: bestProfit, matchup: best.matchup || 'Unknown', date: best.placed_at ?? best.created_at };
+}
+
+function calcLongestWinStreak(bets: Bet[]): { count: number; startDate: string; endDate: string } | null {
+  const settled = [...bets]
+    .filter((b) => b.status === 'won' || b.status === 'lost')
+    .sort((a, b) => new Date(a.placed_at ?? a.created_at).getTime() - new Date(b.placed_at ?? b.created_at).getTime());
+  let maxStreak = 0, maxStart = 0, maxEnd = 0, cur = 0, curStart = 0;
+  for (let i = 0; i < settled.length; i++) {
+    if (settled[i].status === 'won') {
+      if (cur === 0) curStart = i;
+      cur++;
+      if (cur > maxStreak) { maxStreak = cur; maxStart = curStart; maxEnd = i; }
+    } else { cur = 0; }
+  }
+  if (maxStreak < 2) return null;
+  return {
+    count: maxStreak,
+    startDate: settled[maxStart].placed_at ?? settled[maxStart].created_at,
+    endDate: settled[maxEnd].placed_at ?? settled[maxEnd].created_at,
+  };
+}
+
+function calcBestMonthlyROI(bets: Bet[]): { roi: number; month: string } | null {
+  const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+  const groups: Record<string, Bet[]> = {};
+  settled.forEach((b) => {
+    const d = new Date(b.placed_at ?? b.created_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(b);
+  });
+  let bestROI = -Infinity, bestMonth = '';
+  Object.entries(groups).forEach(([key, group]) => {
+    if (group.length < 3) return;
+    const wagered = group.reduce((s, b) => s + (b.wager || 0), 0);
+    let profit = 0;
+    group.forEach((b) => {
+      if (b.status === 'won') profit += (b.potential_payout || 0) - (b.wager || 0);
+      else if (b.status === 'lost') profit -= b.wager || 0;
+    });
+    const roi = wagered > 0 ? (profit / wagered) * 100 : 0;
+    if (roi > bestROI) { bestROI = roi; bestMonth = key; }
+  });
+  if (bestMonth === '') return null;
+  const [year, month] = bestMonth.split('-');
+  const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return { roi: bestROI, month: monthName };
+}
+
+function calcMostProfitableSport(bets: Bet[]): { sport: string; profit: number; winRate: number } | null {
+  const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+  if (settled.length === 0) return null;
+  const groups: Record<string, Bet[]> = {};
+  settled.forEach((b) => {
+    const sport = b.sport || 'Unknown';
+    if (!groups[sport]) groups[sport] = [];
+    groups[sport].push(b);
+  });
+  let best: { sport: string; profit: number; winRate: number } | null = null;
+  Object.entries(groups).forEach(([sport, group]) => {
+    let profit = 0;
+    group.forEach((b) => {
+      if (b.status === 'won') profit += (b.potential_payout || 0) - (b.wager || 0);
+      else if (b.status === 'lost') profit -= b.wager || 0;
+    });
+    const wins = group.filter((b) => b.status === 'won').length;
+    const winRate = (wins / group.length) * 100;
+    if (!best || profit > best.profit) best = { sport, profit, winRate };
+  });
+  return best;
+}
+
+function calcBestBetType(bets: Bet[]): { betType: string; roi: number; winRate: number } | null {
+  const settled = bets.filter((b) => b.status === 'won' || b.status === 'lost');
+  if (settled.length === 0) return null;
+  const groups: Record<string, Bet[]> = {};
+  settled.forEach((b) => {
+    const type = b.bet_type || 'Unknown';
+    const label = type === 'over_under' ? 'Over/Under' : type.charAt(0).toUpperCase() + type.slice(1);
+    if (!groups[label]) groups[label] = [];
+    groups[label].push(b);
+  });
+  let best: { betType: string; roi: number; winRate: number } | null = null;
+  Object.entries(groups).forEach(([type, group]) => {
+    const wagered = group.reduce((s, b) => s + (b.wager || 0), 0);
+    let profit = 0;
+    group.forEach((b) => {
+      if (b.status === 'won') profit += (b.potential_payout || 0) - (b.wager || 0);
+      else if (b.status === 'lost') profit -= b.wager || 0;
+    });
+    const roi = wagered > 0 ? (profit / wagered) * 100 : 0;
+    const wins = group.filter((b) => b.status === 'won').length;
+    const winRate = (wins / group.length) * 100;
+    if (!best || roi > best.roi) best = { betType: type, roi, winRate };
+  });
+  return best;
+}
+
+// ──────────────────────────────────────
+// Badge Detail Modal
+// ──────────────────────────────────────
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const MODAL_HEIGHT = SCREEN_HEIGHT * 0.4;
+
+function BadgeDetailModal({
+  badge,
+  onClose,
+  colors,
+}: {
+  badge: {
+    def: BadgeDef;
+    isUnlocked: boolean;
+    unlockedAt?: string;
+    progressData?: { current: number; target: number };
+  } | null;
+  onClose: () => void;
+  colors: ThemeColors;
+}) {
+  const translateY = useSharedValue(MODAL_HEIGHT);
+  const overlayOpacity = useSharedValue(0);
+  const shimmerValue = useSharedValue(0);
+  const visible = badge !== null;
+
+  useEffect(() => {
+    if (visible) {
+      translateY.value = withSpring(0, { damping: 15, stiffness: 150 });
+      overlayOpacity.value = withTiming(0.5, { duration: 300 });
+      // Shimmer loop for unlocked badges
+      if (badge?.isUnlocked) {
+        shimmerValue.value = 0;
+        shimmerValue.value = withTiming(1, { duration: 2000 });
+      }
+    }
+  }, [visible]);
+
+  const dismiss = useCallback(() => {
+    translateY.value = withSpring(MODAL_HEIGHT, { damping: 15, stiffness: 150 });
+    overlayOpacity.value = withTiming(0, { duration: 200 });
+    setTimeout(onClose, 300);
+  }, [onClose]);
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      if (e.translationY > 0) {
+        translateY.value = e.translationY;
+      }
+    })
+    .onEnd((e) => {
+      if (e.translationY > 80) {
+        translateY.value = withSpring(MODAL_HEIGHT, { damping: 15, stiffness: 150 });
+        overlayOpacity.value = withTiming(0, { duration: 200 });
+        runOnJS(onClose)();
+      } else {
+        translateY.value = withSpring(0, { damping: 15, stiffness: 150 });
+      }
+    });
+
+  const modalStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }));
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    opacity: 0.3 + shimmerValue.value * 0.4,
+    transform: [{ scale: 1 + shimmerValue.value * 0.08 }],
+  }));
+
+  const mStyles = useMemo(() => createModalStyles(colors), [colors]);
+
+  if (!visible) return null;
+
+  const { def, isUnlocked, unlockedAt, progressData } = badge;
+  const pct = progressData ? Math.round((progressData.current / progressData.target) * 100) : 0;
+
+  // Build contextual progress text for locked badges
+  let progressText = '';
+  if (!isUnlocked && progressData) {
+    const remaining = progressData.target - progressData.current;
+    if (def.category === 'roi') {
+      progressText = `${remaining} more to go`;
+    } else if (def.category === 'activity') {
+      progressText = `Need ${remaining} more`;
+    } else {
+      progressText = `${remaining} away`;
+    }
+  }
+
+  return (
+    <Modal transparent visible animationType="none" onRequestClose={dismiss}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <TouchableWithoutFeedback onPress={dismiss}>
+          <ReAnimated.View style={[mStyles.overlay, overlayStyle]} />
+        </TouchableWithoutFeedback>
+
+        <GestureDetector gesture={panGesture}>
+          <ReAnimated.View style={[mStyles.sheet, modalStyle]}>
+            {/* Drag handle */}
+            <View style={mStyles.dragHandle} />
+
+            {/* Icon */}
+            {isUnlocked ? (
+              <ReAnimated.View style={[mStyles.iconGlow, shimmerStyle]}>
+                <Text style={{ fontSize: 48 }}>{def.emoji}</Text>
+              </ReAnimated.View>
+            ) : (
+              <View style={mStyles.iconLocked}>
+                <Ionicons name="lock-closed" size={32} color={colors.textTertiary} />
+              </View>
+            )}
+
+            {/* Badge name */}
+            <Text style={mStyles.badgeTitle}>{def.name}</Text>
+
+            {/* Description */}
+            <Text style={mStyles.badgeDescription}>{def.description}</Text>
+
+            {/* Divider */}
+            <View style={mStyles.divider} />
+
+            {isUnlocked && unlockedAt ? (
+              <Text style={mStyles.unlockedDate}>
+                Unlocked on{' '}
+                {new Date(unlockedAt).toLocaleDateString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </Text>
+            ) : progressData ? (
+              <View style={mStyles.progressSection}>
+                {/* Progress bar */}
+                <View style={mStyles.progressBarTrack}>
+                  <View
+                    style={[
+                      mStyles.progressBarFill,
+                      { width: `${Math.min(pct, 100)}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={mStyles.progressText}>
+                  {progressData.current} / {progressData.target} — {progressText}
+                </Text>
+              </View>
+            ) : null}
+          </ReAnimated.View>
+        </GestureDetector>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+}
+
+function createModalStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: '#000000',
+    },
+    sheet: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: MODAL_HEIGHT,
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      alignItems: 'center',
+      paddingHorizontal: 24,
+      paddingTop: 12,
+    },
+    dragHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.border,
+      marginBottom: 20,
+    },
+    iconGlow: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.accentBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.35,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    iconLocked: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.chipBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+    badgeTitle: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 6,
+      textAlign: 'center',
+    },
+    badgeDescription: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 21,
+      paddingHorizontal: 12,
+    },
+    divider: {
+      width: '80%',
+      height: 1,
+      backgroundColor: colors.dividerLine,
+      marginVertical: 16,
+    },
+    unlockedDate: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    progressSection: {
+      width: '100%',
+      alignItems: 'center',
+    },
+    progressBarTrack: {
+      width: '80%',
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.chipBg,
+      overflow: 'hidden',
+      marginBottom: 10,
+    },
+    progressBarFill: {
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.accent,
+    },
+    progressText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+  });
+}
+
+// ──────────────────────────────────────
 // Progress ring SVG-free (pure View)
 // ──────────────────────────────────────
 
@@ -521,6 +1111,7 @@ function ProgressRing({
 // ──────────────────────────────────────
 
 export default function EdgeScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -541,7 +1132,7 @@ export default function EdgeScreen() {
     const [betsRes, achRes] = await Promise.all([
       supabase
         .from('bets')
-        .select('id, user_id, status, bet_type, sport, wager, potential_payout, placed_at, created_at, odds')
+        .select('id, user_id, status, bet_type, sport, sportsbook, matchup, wager, potential_payout, placed_at, created_at, odds')
         .eq('user_id', user.id)
         .order('placed_at', { ascending: false })
         .order('created_at', { ascending: false }),
@@ -578,6 +1169,9 @@ export default function EdgeScreen() {
       if (inserted) {
         setAchievements((prev) => [...prev, ...inserted]);
 
+        // Haptic success buzz for new badge unlock
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+
         // Send push notification for each newly unlocked badge
         inserted.forEach((ach: Achievement) => {
           const badgeDef = BADGE_DEFINITIONS.find((d) => d.id === ach.badge_id);
@@ -611,14 +1205,6 @@ export default function EdgeScreen() {
     setRefreshing(false);
   }, [fetchData]);
 
-  // Blurred header on scroll
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const headerBlurOpacity = scrollY.interpolate({
-    inputRange: [0, 20, 40],
-    outputRange: [0, 0, 1],
-    extrapolate: 'clamp',
-  });
-
   // ── Computed stats ───────────────────
   const settled = useMemo(() => bets.filter((b) => b.status === 'won' || b.status === 'lost'), [bets]);
   const totalWins = useMemo(() => bets.filter((b) => b.status === 'won').length, [bets]);
@@ -635,6 +1221,52 @@ export default function EdgeScreen() {
     if (qualifying.length === 0) return null;
     return qualifying.reduce((a, b) => (a.winRate > b.winRate ? a : b));
   }, [betSizeRanges]);
+
+  // ── Personal records ──────────────────
+  const personalRecords = useMemo(() => {
+    const records: { label: string; emoji: string; value: string; detail: string }[] = [];
+    const biggestWin = calcBiggestWin(bets);
+    if (biggestWin) {
+      records.push({
+        label: 'Biggest Win', emoji: '💰',
+        value: `${currencySymbol}${biggestWin.profit.toFixed(2)}`,
+        detail: `${biggestWin.matchup} · ${new Date(biggestWin.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+      });
+    }
+    const longestStreak = calcLongestWinStreak(bets);
+    if (longestStreak) {
+      records.push({
+        label: 'Longest Win Streak', emoji: '🔥',
+        value: `${longestStreak.count} wins in a row`,
+        detail: `${new Date(longestStreak.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(longestStreak.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+      });
+    }
+    const bestMonth = calcBestMonthlyROI(bets);
+    if (bestMonth) {
+      records.push({
+        label: 'Best Monthly ROI', emoji: '📈',
+        value: `${bestMonth.roi >= 0 ? '+' : ''}${bestMonth.roi.toFixed(0)}%`,
+        detail: bestMonth.month,
+      });
+    }
+    const mostProfitSport = calcMostProfitableSport(bets);
+    if (mostProfitSport) {
+      records.push({
+        label: 'Most Profitable Sport', emoji: '🏆',
+        value: mostProfitSport.sport,
+        detail: `${currencySymbol}${mostProfitSport.profit.toFixed(2)} profit · ${mostProfitSport.winRate.toFixed(0)}% WR`,
+      });
+    }
+    const bestType = calcBestBetType(bets);
+    if (bestType) {
+      records.push({
+        label: 'Best Bet Type', emoji: '🎯',
+        value: bestType.betType,
+        detail: `${formatROI(bestType.roi)} ROI · ${bestType.winRate.toFixed(0)}% WR`,
+      });
+    }
+    return records;
+  }, [bets, currencySymbol]);
 
   // ── Achievement helpers ──────────────
   const unlockedSet = useMemo(() => new Set(achievements.map((a) => a.badge_id)), [achievements]);
@@ -660,22 +1292,98 @@ export default function EdgeScreen() {
       .slice(0, 3);
   }, [bets, unlockedSet]);
 
-  const GREEN = '#2DC672';
+  const GREEN = colors.accent;
   const RED = '#E85D5D';
+
+  // Pulse glow for the first badge when user has 0 bets
+  const firstBadgePulse = useSharedValue(0.3);
+  useEffect(() => {
+    if (bets.length === 0) {
+      firstBadgePulse.value = withRepeat(
+        withTiming(1, { duration: 1200 }),
+        -1,
+        true,
+      );
+    } else {
+      firstBadgePulse.value = withTiming(0.3, { duration: 300 });
+    }
+  }, [bets.length]);
+  const firstBadgePulseStyle = useAnimatedStyle(() => ({
+    shadowColor: GREEN,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: firstBadgePulse.value * 0.6,
+    shadowRadius: 8 + firstBadgePulse.value * 8,
+    elevation: firstBadgePulse.value > 0.5 ? 6 : 2,
+  }));
+
+  // ── Badge detail modal state ─────────
+  const [selectedBadge, setSelectedBadge] = useState<{
+    def: BadgeDef;
+    isUnlocked: boolean;
+    unlockedAt?: string;
+    progressData?: { current: number; target: number };
+  } | null>(null);
+
+  const handleBadgeTap = useCallback(
+    (badge: BadgeDef) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const isUnlocked = unlockedSet.has(badge.id);
+      const ach = achievements.find((a) => a.badge_id === badge.id);
+      const progressData = isUnlocked ? undefined : badge.progress(bets);
+      setSelectedBadge({
+        def: badge,
+        isUnlocked,
+        unlockedAt: ach?.unlocked_at,
+        progressData,
+      });
+    },
+    [unlockedSet, achievements, bets]
+  );
 
   // ── Renders ──────────────────────────
   const renderInsights = () => {
+    if (loading) {
+      return (
+        <>
+          {/* Skeleton: stat cards row */}
+          <FadeInView delay={0} direction="bottom">
+            <View style={styles.statsRow}>
+              <View style={[styles.statCard, { padding: 20 }]}>
+                <SkeletonLoader width={60} height={10} borderRadius={4} />
+                <SkeletonLoader width={80} height={28} borderRadius={8} style={{ marginTop: 10 }} />
+              </View>
+              <View style={[styles.statCard, { padding: 20 }]}>
+                <SkeletonLoader width={40} height={10} borderRadius={4} />
+                <SkeletonLoader width={80} height={28} borderRadius={8} style={{ marginTop: 10 }} />
+              </View>
+            </View>
+          </FadeInView>
+          {/* Skeleton: breakdown rows */}
+          {[0, 1, 2].map((i) => (
+            <FadeInView key={i} delay={80 + i * 60} direction="bottom">
+              <SkeletonCard />
+            </FadeInView>
+          ))}
+        </>
+      );
+    }
+
     if (bets.length === 0) {
       return (
         <FadeInView delay={0} direction="bottom">
           <View style={styles.emptyStateCard}>
-            <View style={[styles.emptyIconCircle, { backgroundColor: colors.chipBg }]}>
-              <Ionicons name="flash-outline" size={36} color={colors.textSecondary} />
-            </View>
-            <Text style={styles.emptyTitle}>No data yet</Text>
+            <Text style={{ fontSize: 40, marginBottom: 16 }}>📊</Text>
+            <Text style={styles.emptyTitle}>Not enough data yet</Text>
             <Text style={styles.emptySubtitle}>
-              Start tracking bets to unlock your competitive edge
+              Log a few bets and come back to see your performance breakdown
             </Text>
+            <AnimatedPressable
+              style={styles.emptyAddButton}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/add-bet'); }}
+              scaleDown={0.97}
+            >
+              <Text style={styles.emptyAddButtonText}>Add a Bet</Text>
+            </AnimatedPressable>
           </View>
         </FadeInView>
       );
@@ -926,15 +1634,105 @@ export default function EdgeScreen() {
             </View>
           </View>
         </FadeInView>
+
+        {/* Personal Records */}
+        <FadeInView delay={480} direction="bottom">
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionTitleRow}>
+              <Text style={{ fontSize: 18 }}>🏅</Text>
+              <Text style={styles.sectionTitle}>Personal Records</Text>
+            </View>
+            {settled.length === 0 ? (
+              <Text style={styles.recordsEmptyText}>
+                Place and settle some bets to see your records here
+              </Text>
+            ) : personalRecords.length === 0 ? (
+              <Text style={styles.recordsEmptyText}>
+                Place and settle some bets to see your records here
+              </Text>
+            ) : (
+              personalRecords.map((record, idx) => (
+                <FadeInView key={record.label} delay={500 + idx * 60} direction="bottom">
+                  <AnimatedPressable style={styles.recordCard} scaleDown={0.97}>
+                    <View style={styles.recordRow}>
+                      <View style={styles.recordLabelArea}>
+                        <Text style={{ fontSize: 16 }}>{record.emoji}</Text>
+                        <Text style={styles.recordLabel}>{record.label}</Text>
+                      </View>
+                      <Text style={styles.recordValue}>{record.value}</Text>
+                    </View>
+                    <Text style={styles.recordDetail}>{record.detail}</Text>
+                  </AnimatedPressable>
+                </FadeInView>
+              ))
+            )}
+          </View>
+        </FadeInView>
       </>
     );
   };
 
   const renderAchievements = () => {
+    if (loading) {
+      return (
+        <>
+          {/* Skeleton: recently unlocked row */}
+          <FadeInView delay={0} direction="bottom">
+            <SkeletonLoader width={160} height={16} borderRadius={8} style={{ marginBottom: 16 }} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={[styles.unlockedCard, { alignItems: 'center' }]}>
+                  <SkeletonLoader width={48} height={48} borderRadius={24} />
+                  <SkeletonLoader width={80} height={14} borderRadius={6} style={{ marginTop: 10 }} />
+                  <SkeletonLoader width={60} height={10} borderRadius={4} style={{ marginTop: 6 }} />
+                </View>
+              ))}
+            </ScrollView>
+          </FadeInView>
+          {/* Skeleton: in progress */}
+          <FadeInView delay={80} direction="bottom">
+            <SkeletonLoader width={120} height={16} borderRadius={8} style={{ marginTop: 24, marginBottom: 16 }} />
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={[styles.progressCard]}>
+                <SkeletonLoader width={48} height={48} borderRadius={24} />
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <SkeletonLoader width={100} height={14} borderRadius={6} />
+                  <SkeletonLoader width={60} height={10} borderRadius={4} style={{ marginTop: 6 }} />
+                </View>
+              </View>
+            ))}
+          </FadeInView>
+          {/* Skeleton: all badges grid */}
+          <FadeInView delay={160} direction="bottom">
+            <SkeletonLoader width={100} height={16} borderRadius={8} style={{ marginTop: 24, marginBottom: 16 }} />
+            <View style={styles.badgeGrid}>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <View key={i} style={[styles.badgeCell, { alignItems: 'center' }]}>
+                  <SkeletonLoader width={56} height={56} borderRadius={28} />
+                  <SkeletonLoader width={50} height={10} borderRadius={4} style={{ marginTop: 8 }} />
+                </View>
+              ))}
+            </View>
+          </FadeInView>
+        </>
+      );
+    }
+
     return (
       <>
+        {/* Motivational header when 0 bets */}
+        {bets.length === 0 && (
+          <FadeInView delay={0} direction="bottom">
+            <View style={styles.motivationalHeader}>
+              <Text style={styles.motivationalText}>
+                Start unlocking badges by uploading your first bet! 🏆
+              </Text>
+            </View>
+          </FadeInView>
+        )}
+
         {/* Recently Unlocked */}
-        <FadeInView delay={0} direction="bottom">
+        <FadeInView delay={bets.length === 0 ? 60 : 0} direction="bottom">
           <View style={styles.sectionTitleRow}>
             <Ionicons name="star-outline" size={18} color={GREEN} />
             <Text style={styles.sectionTitle}>Recently Unlocked</Text>
@@ -946,8 +1744,13 @@ export default function EdgeScreen() {
               contentContainerStyle={styles.horizontalScroll}
             >
               {unlockedBadges.map((ach) => (
-                <View key={ach.badge_id} style={styles.unlockedCard}>
-                  <View style={[styles.unlockedIconCircle, { backgroundColor: `rgba(45, 198, 114, 0.12)` }]}>
+                <AnimatedPressable
+                  key={ach.badge_id}
+                  style={styles.unlockedCard}
+                  onPress={() => handleBadgeTap(ach.def!)}
+                  scaleDown={0.95}
+                >
+                  <View style={[styles.unlockedIconCircle, { backgroundColor: colors.accentBg }]}>
                     <Text style={{ fontSize: 24 }}>{ach.def!.emoji}</Text>
                   </View>
                   <Text style={styles.unlockedName}>{ach.def!.name}</Text>
@@ -958,7 +1761,7 @@ export default function EdgeScreen() {
                       year: 'numeric',
                     })}
                   </Text>
-                </View>
+                </AnimatedPressable>
               ))}
             </ScrollView>
           ) : (
@@ -981,7 +1784,12 @@ export default function EdgeScreen() {
               const pctDisplay = Math.round(item.pct * 100);
               const remaining = item.target - item.current;
               return (
-                <View key={item.def.id} style={styles.progressCard}>
+                <AnimatedPressable
+                  key={item.def.id}
+                  style={styles.progressCard}
+                  onPress={() => handleBadgeTap(item.def)}
+                  scaleDown={0.97}
+                >
                   <ProgressRing
                     progress={item.pct}
                     size={48}
@@ -997,12 +1805,12 @@ export default function EdgeScreen() {
                       {remaining} away
                     </Text>
                   </View>
-                  <View style={[styles.progressPctBadge, { backgroundColor: `rgba(45, 198, 114, 0.12)` }]}>
+                  <View style={[styles.progressPctBadge, { backgroundColor: colors.accentBg }]}>
                     <Text style={[styles.progressPctText, { color: GREEN }]}>
                       {pctDisplay}%
                     </Text>
                   </View>
-                </View>
+                </AnimatedPressable>
               );
             })}
           </FadeInView>
@@ -1017,16 +1825,23 @@ export default function EdgeScreen() {
           <View style={styles.badgeGrid}>
             {BADGE_DEFINITIONS.map((badge) => {
               const isUnlocked = unlockedSet.has(badge.id);
+              const isFirstBadgePulse = badge.id === 'first_bet' && bets.length === 0 && !isUnlocked;
               return (
-                <View key={badge.id} style={styles.badgeCell}>
-                  <View
+                <AnimatedPressable
+                  key={badge.id}
+                  style={styles.badgeCell}
+                  onPress={() => handleBadgeTap(badge)}
+                  scaleDown={0.93}
+                >
+                  <ReAnimated.View
                     style={[
                       styles.badgeIconCircle,
                       {
                         backgroundColor: isUnlocked
-                          ? `rgba(45, 198, 114, 0.12)`
+                          ? colors.accentBg
                           : colors.chipBg,
                       },
+                      isFirstBadgePulse && firstBadgePulseStyle,
                     ]}
                   >
                     {isUnlocked ? (
@@ -1034,7 +1849,7 @@ export default function EdgeScreen() {
                     ) : (
                       <Ionicons name="lock-closed" size={20} color={colors.textTertiary} />
                     )}
-                  </View>
+                  </ReAnimated.View>
                   <Text
                     style={[
                       styles.badgeName,
@@ -1052,7 +1867,7 @@ export default function EdgeScreen() {
                       style={{ marginTop: 2 }}
                     />
                   )}
-                </View>
+                </AnimatedPressable>
               );
             })}
           </View>
@@ -1062,13 +1877,9 @@ export default function EdgeScreen() {
   };
 
   return (
+    <TabScreenTransition>
     <SafeAreaView style={styles.container}>
       <StatusBar style={colors.statusBar} />
-
-      {/* Blurred header overlay */}
-      <Animated.View style={[styles.blurHeader, { opacity: headerBlurOpacity }]} pointerEvents="none">
-        <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      </Animated.View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -1081,10 +1892,6 @@ export default function EdgeScreen() {
             colors={[colors.chipActiveBg]}
           />
         }
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
         scrollEventThrottle={16}
       >
         {/* Header */}
@@ -1137,7 +1944,14 @@ export default function EdgeScreen() {
         {/* Tab content */}
         {activeTab === 'Insights' ? renderInsights() : renderAchievements()}
       </ScrollView>
+
+      <BadgeDetailModal
+        badge={selectedBadge}
+        onClose={() => setSelectedBadge(null)}
+        colors={colors}
+      />
     </SafeAreaView>
+    </TabScreenTransition>
   );
 }
 
@@ -1150,14 +1964,6 @@ function createStyles(colors: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: colors.background,
-    },
-    blurHeader: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      height: 100,
-      zIndex: 10,
     },
     scrollContent: {
       paddingHorizontal: 20,
@@ -1620,6 +2426,81 @@ function createStyles(colors: ThemeColors) {
       fontWeight: '600',
       color: colors.text,
       textAlign: 'center',
+    },
+
+    // ── Personal Records ────────────────
+    recordsEmptyText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      paddingVertical: 8,
+    },
+    recordCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    recordRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 4,
+    },
+    recordLabelArea: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    recordLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    recordValue: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    recordDetail: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginLeft: 24,
+      marginTop: 2,
+    },
+
+    // ── Empty state CTA ─────────────────
+    emptyAddButton: {
+      backgroundColor: colors.buttonPrimary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 32,
+      marginTop: 20,
+    },
+    emptyAddButtonText: {
+      color: colors.buttonPrimaryText,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+
+    // ── Motivational header ─────────────
+    motivationalHeader: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+    },
+    motivationalText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 22,
     },
   });
 }

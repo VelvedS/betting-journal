@@ -45,6 +45,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/context/AuthContext';
@@ -202,20 +203,23 @@ export default function NotificationsScreen() {
   // ── Toggle handlers ──
 
   const togglePush = (key: NotifKey) => {
+    if (Platform.OS !== 'web') try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
     const next = { ...pushPrefs, [key]: !pushPrefs[key] };
     setPushPrefs(next);
     saveNotifPrefs(next, emailPrefs);
   };
 
   const toggleEmail = (key: NotifKey) => {
+    if (Platform.OS !== 'web') try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
     const next = { ...emailPrefs, [key]: !emailPrefs[key] };
     setEmailPrefs(next);
     saveNotifPrefs(pushPrefs, next);
-  };
+};
 
   // ── Quiet hours handlers ──
 
   const handleQuietHoursToggle = () => {
+    if (Platform.OS !== 'web') try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
     const next = { ...quietHours, enabled: !quietHours.enabled };
     setQuietHours(next);
     saveQuietHours(next);
@@ -554,7 +558,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       backgroundColor: colors.dividerLine, padding: 2, justifyContent: 'center',
     },
     toggleSwitchOn: {
-      backgroundColor: '#10B981', justifyContent: 'flex-end', flexDirection: 'row',
+      backgroundColor: colors.accent, justifyContent: 'flex-end', flexDirection: 'row',
     },
     toggleThumb: {
       width: 24, height: 24, borderRadius: 12, backgroundColor: colors.surface,
@@ -587,7 +591,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.18, shadowRadius: 8, elevation: 6,
     },
-    toastSuccess: { backgroundColor: '#10B981' },
+    toastSuccess: { backgroundColor: colors.accent },
     toastError: { backgroundColor: '#E85D5D' },
     toastText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', flex: 1 },
 
@@ -610,7 +614,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       borderBottomWidth: 1, borderBottomColor: colors.dividerLine,
     },
     pickerTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
-    pickerDone: { fontSize: 16, fontWeight: '700', color: '#10B981' },
+    pickerDone: { fontSize: 16, fontWeight: '700', color: colors.accent },
     picker: { width: '100%' },
   });
 }

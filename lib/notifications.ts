@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
+import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 import { supabase } from './supabase'
 
@@ -41,15 +42,24 @@ export async function registerPushToken(userId: string): Promise<void> {
       name: 'Ledgr Notifications',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#10B981',
+      lightColor: '#2DC672',
     })
   }
 
   // Get Expo push token
-  const tokenData = await Notifications.getExpoPushTokenAsync({
-    projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
-  })
-  const token = tokenData.data
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId
+
+  let token: string
+  try {
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId,
+    })
+    token = tokenData.data
+  } catch (e) {
+    console.warn('[Push] Push notifications not available — projectId not configured')
+    return
+  }
   console.log('[Push] Token registered:', token)
 
   // Save to profiles table

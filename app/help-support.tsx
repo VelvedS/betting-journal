@@ -468,7 +468,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     },
     heroTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
     heroIconCircle: {
-      width: 48, height: 48, borderRadius: 24, backgroundColor: '#10B981',
+      width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accent,
       alignItems: 'center', justifyContent: 'center', marginRight: 14,
     },
     heroTextContainer: { flex: 1 },
@@ -479,7 +479,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       flex: 1, backgroundColor: colors.iconCircleBg, borderRadius: 10,
       paddingVertical: 14, paddingHorizontal: 12, alignItems: 'flex-start', height: 68,
     },
-    statValue: { fontSize: 20, fontWeight: '700', color: '#10B981', marginBottom: 4 },
+    statValue: { fontSize: 20, fontWeight: '700', color: colors.accent, marginBottom: 4 },
     statLabel: { fontSize: 11, fontWeight: '400', color: colors.textSecondary },
 
     // Card
@@ -517,7 +517,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       height: 130, borderWidth: 1, borderColor: colors.inputBorder,
     },
     sendButton: {
-      backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 16,
+      backgroundColor: colors.accent, borderRadius: 12, paddingVertical: 16,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52,
     },
     sendButtonDisabled: { opacity: 0.5 },
@@ -563,7 +563,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.18, shadowRadius: 8, elevation: 6,
     },
-    toastSuccess: { backgroundColor: '#10B981' },
+    toastSuccess: { backgroundColor: colors.accent },
     toastError: { backgroundColor: '#E85D5D' },
     toastText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', flex: 1 },
   });

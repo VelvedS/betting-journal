@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import TabScreenTransition from '@/components/TabScreenTransition';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
@@ -20,14 +21,13 @@ import { formatCurrency, formatROI, formatWholeNumber } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import * as Haptics from 'expo-haptics';
-import { BlurView } from 'expo-blur';
 import FadeInView from '@/components/FadeInView';
 
 type FilterType = 'All' | 'Wins' | 'Losses' | 'Pending';
 
 const getStatusConfig = (status: string) => {
   switch (status) {
-    case 'won': return { label: 'WIN', statusColor: '#2DC672', statusBg: '#E8F8F0', icon: 'checkmark-circle' };
+    case 'won': return { label: 'WIN', statusColor: '#2DC672', statusBg: 'rgba(45, 198, 114, 0.12)', icon: 'checkmark-circle' };
     case 'lost': return { label: 'LOSS', statusColor: '#E85D5D', statusBg: '#FFECEC', icon: 'close-circle' };
     case 'pending': return { label: 'PENDING', statusColor: '#F5A623', statusBg: '#FFF5E0', icon: 'time' };
     case 'void': return { label: 'VOID', statusColor: '#999999', statusBg: '#F0F0F0', icon: 'ban' };
@@ -38,7 +38,7 @@ const getStatusConfig = (status: string) => {
 export default function StatsScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { currency, showBalance } = usePreferences();
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All');
@@ -68,14 +68,6 @@ export default function StatsScreen() {
     await fetchBets();
     setRefreshing(false);
   }, [fetchBets]);
-
-  // Blurred header on scroll
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const headerBlurOpacity = scrollY.interpolate({
-    inputRange: [0, 20, 40],
-    outputRange: [0, 0, 1],
-    extrapolate: 'clamp',
-  });
 
   const hasBets = allBets.length > 0;
 
@@ -127,7 +119,7 @@ export default function StatsScreen() {
   const roiValue = totalWagered > 0 ? (netPL / totalWagered) * 100 : 0;
 
   const getValueColor = (value: number) => {
-    if (value > 0) return '#10B981';
+    if (value > 0) return colors.accent;
     if (value < 0) return '#EF4444';
     return colors.text;
   };
@@ -151,13 +143,9 @@ export default function StatsScreen() {
   const subtitleText = filteredCount === 1 ? '1 Total Bet' : `${filteredCount} Total Bets`;
 
   return (
+    <TabScreenTransition>
     <SafeAreaView style={styles.container}>
       <StatusBar style={colors.statusBar} />
-
-      {/* Blurred header overlay */}
-      <Animated.View style={[styles.blurHeader, { opacity: headerBlurOpacity }]} pointerEvents="none">
-        <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      </Animated.View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -170,10 +158,6 @@ export default function StatsScreen() {
             colors={[colors.chipActiveBg]}
           />
         }
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
         scrollEventThrottle={16}
       >
         {/* Header */}
@@ -194,7 +178,7 @@ export default function StatsScreen() {
           <FadeInView delay={0} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
-                <Ionicons name="trending-up" size={20} color="#10B981" />
+                <Ionicons name="trending-up" size={20} color={colors.accent} />
               </View>
               <Text style={styles.summaryLabel} numberOfLines={1}>WINS</Text>
               <Text
@@ -248,7 +232,7 @@ export default function StatsScreen() {
           <FadeInView delay={60} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
-                <Ionicons name="cash-outline" size={20} color="#10B981" />
+                <Ionicons name="cash-outline" size={20} color={colors.accent} />
               </View>
               <Text style={styles.summaryLabel} numberOfLines={1}>WAGERED</Text>
               <Text
@@ -265,7 +249,7 @@ export default function StatsScreen() {
           <FadeInView delay={80} direction="bottom" style={styles.summaryCardFlex}>
             <View style={styles.summaryCard}>
               <View style={styles.iconContainer}>
-                <Ionicons name="checkmark-circle-outline" size={20} color="#10B981" />
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.accent} />
               </View>
               <Text style={styles.summaryLabel} numberOfLines={1}>WIN RATE</Text>
               <Text
@@ -373,7 +357,7 @@ export default function StatsScreen() {
                     </View>
                     <View style={styles.statColumn}>
                       <Text style={styles.statLabel}>ROI</Text>
-                      <Text style={[styles.roiValue, { color: showBalance ? (roiPctValue < 0 ? '#E85D5D' : '#10B981') : colors.textSecondary }]}>{showBalance ? formatROI(roiPctValue) : '••••'}</Text>
+                      <Text style={[styles.roiValue, { color: showBalance ? (roiPctValue < 0 ? '#E85D5D' : colors.accent) : colors.textSecondary }]}>{showBalance ? formatROI(roiPctValue) : '••••'}</Text>
                     </View>
                   </View>
                   <View style={styles.betFooter}>
@@ -387,19 +371,25 @@ export default function StatsScreen() {
           ) : (
             <FadeInView delay={500} direction="bottom">
               <View style={styles.emptyStateCard}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons name="bar-chart-outline" size={36} color="#6366F1" />
-                </View>
-                <Text style={styles.emptyTitle}>No betting history</Text>
+                <Text style={{ fontSize: 40, marginBottom: 16 }}>📊</Text>
+                <Text style={styles.emptyTitle}>No stats yet</Text>
                 <Text style={styles.emptySubtitle}>
-                  Your bets will appear here once you start tracking
+                  Your betting analytics will appear here after your first bet
                 </Text>
+                <AnimatedPressable
+                  style={styles.emptyAddButton}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/add-bet'); }}
+                  scaleDown={0.97}
+                >
+                  <Text style={styles.emptyAddButtonText}>Add a Bet</Text>
+                </AnimatedPressable>
               </View>
             </FadeInView>
           )}
         </View>
       </ScrollView>
     </SafeAreaView>
+    </TabScreenTransition>
   );
 }
 
@@ -408,14 +398,6 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  blurHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 100,
-    zIndex: 10,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -568,7 +550,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
   roiValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#10B981',
+    color: colors.accent,
   },
   betFooter: {
     flexDirection: 'row',
@@ -611,6 +593,18 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 20,
+  },
+  emptyAddButton: {
+    backgroundColor: colors.chipActiveBg,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+  },
+  emptyAddButtonText: {
+    color: colors.chipActiveText,
+    fontSize: 16,
+    fontWeight: '600',
   },
   });
 }
