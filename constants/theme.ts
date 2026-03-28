@@ -1,41 +1,146 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+export type ThemeColors = {
+  // Page backgrounds
+  background: string;
+  // Card / surface backgrounds
+  surface: string;
+  surfaceElevated: string;
+  // Borders
+  border: string;
+  // Text
+  text: string;
+  textSecondary: string;
+  textTertiary: string;
+  // Icon circle fill
+  iconCircleBg: string;
+  iconSecondary: string;
+  // Tab bar
+  tabBar: string;
+  tabActive: string;
+  tabInactive: string;
+  // Filter chip / segment pills
+  chipBg: string;
+  chipText: string;
+  chipActiveBg: string;
+  chipActiveText: string;
+  // Text inputs
+  input: string;
+  inputBorder: string;
+  inputText: string;
+  placeholder: string;
+  // Primary action button (FAB, submit, etc.)
+  buttonPrimary: string;
+  buttonPrimaryText: string;
+  // Divider / HR lines
+  dividerLine: string;
+  // Status bar style
+  statusBar: 'dark' | 'light';
+  // Accent (unified green)
+  accent: string;
+  accentBg: string;
+  // Semantic status colors
+  loss: string;
+  pending: string;
+  ai: string;
+  star: string;
+  // Nav glass
+  navGlass: string;
+  navGlassBorder: string;
+  navGlassHighlight: string;
+  navGlassShadow: string;
+  navActiveIndicator: string;
+  navFadeGradientEnd: string;
+};
+
+export const lightColors: ThemeColors = {
+  background: '#F5F5F5',
+  surface: '#FFFFFF',
+  surfaceElevated: '#FFFFFF',
+  border: '#E8E8E8',
+  text: '#1A1A1A',
+  textSecondary: '#6B6B6B',
+  textTertiary: '#9B9B9B',
+  iconCircleBg: '#F0F0F0',
+  iconSecondary: '#6B6B6B',
+  tabBar: '#FFFFFF',
+  tabActive: '#1A1A2E',
+  tabInactive: '#B0B0B0',
+  chipBg: '#F0F0F0',
+  chipText: '#1A1A1A',
+  chipActiveBg: '#1A1A1A',
+  chipActiveText: '#FFFFFF',
+  input: '#FFFFFF',
+  inputBorder: '#E5E5E5',
+  inputText: '#1A1A1A',
+  placeholder: '#9B9B9B',
+  buttonPrimary: '#1A1A2E',
+  buttonPrimaryText: '#FFFFFF',
+  dividerLine: '#E0E0E0',
+  statusBar: 'dark',
+  accent: '#2DC672',
+  accentBg: 'rgba(45, 198, 114, 0.12)',
+  loss: '#E85D5D',
+  pending: '#F5A623',
+  ai: '#6366F1',
+  star: '#F5A623',
+  navGlass: 'rgba(255, 255, 255, 0.30)',
+  navGlassBorder: 'rgba(255, 255, 255, 0.15)',
+  navGlassHighlight: 'rgba(255, 255, 255, 0.5)',
+  navGlassShadow: 'rgba(0, 0, 0, 0.08)',
+  navActiveIndicator: 'rgba(0, 0, 0, 0.06)',
+  navFadeGradientEnd: 'rgba(245, 245, 245, 0.95)',
+};
+
+export const darkColors: ThemeColors = {
+  background: '#111111',
+  surface: '#1C1C1C',
+  surfaceElevated: '#252525',
+  border: '#2C2C2C',
+  text: '#F0F0F0',
+  textSecondary: '#A0A0A0',
+  textTertiary: '#666666',
+  iconCircleBg: '#2A2A2A',
+  iconSecondary: '#888888',
+  tabBar: '#161616',
+  tabActive: '#F0F0F0',
+  tabInactive: '#555555',
+  chipBg: '#2A2A2A',
+  chipText: '#A0A0A0',
+  chipActiveBg: '#EBEBEB',
+  chipActiveText: '#111111',
+  input: '#1C1C1C',
+  inputBorder: '#333333',
+  inputText: '#F0F0F0',
+  placeholder: '#555555',
+  buttonPrimary: '#EBEBEB',
+  buttonPrimaryText: '#111111',
+  dividerLine: '#2C2C2C',
+  statusBar: 'light',
+  accent: '#2DC672',
+  accentBg: 'rgba(45, 198, 114, 0.15)',
+  loss: '#E85D5D',
+  pending: '#F5A623',
+  ai: '#6366F1',
+  star: '#F5A623',
+  navGlass: 'rgba(30, 30, 30, 0.25)',
+  navGlassBorder: 'rgba(255, 255, 255, 0.08)',
+  navGlassHighlight: 'rgba(255, 255, 255, 0.2)',
+  navGlassShadow: 'rgba(0, 0, 0, 0.4)',
+  navActiveIndicator: 'rgba(255, 255, 255, 0.07)',
+  navFadeGradientEnd: 'rgba(10, 10, 10, 0.95)',
+};
 
 export const Colors = {
-  light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
-  },
-  dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
-  },
+  light: lightColors,
+  dark: darkColors,
 };
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {

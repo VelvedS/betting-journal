@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "betting-journal",
-    "slug": "betting-journal",
+    "name": "Ledgr",
+    "slug": "ledgr",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "bettingjournal",
+    "scheme": "ledgr",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -38,11 +38,23 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2DC672",
+          "sounds": []
+        }
       ]
     ],
+    "notification": {
+      "androidMode": "default"
+    },
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false
     }
   }
 }
