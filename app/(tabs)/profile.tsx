@@ -8,11 +8,19 @@ import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { getCurrencySymbol } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import TabScreenTransition from '@/components/TabScreenTransition';
 import * as Haptics from 'expo-haptics';
 import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
+import { useFocusEffect } from '@react-navigation/native';
+import { getAvailableReports, Season } from '@/lib/seasonDefinitions';
+
+const SPORT_EMOJI: Record<string, string> = {
+  NFL: '\uD83C\uDFC8', NBA: '\uD83C\uDFC0', MLB: '\u26BE',
+  NHL: '\uD83C\uDFD2', NCAAF: '\uD83C\uDFC8', NCAAB: '\uD83C\uDFC0',
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -24,6 +32,9 @@ export default function ProfileScreen() {
   const [winRate, setWinRate] = useState<number | null>(null);
   const [profit, setProfit] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unreadInsights, setUnreadInsights] = useState(0);
+  const [todayAlertCount, setTodayAlertCount] = useState(0);
+  const [availableReports, setAvailableReports] = useState<Array<Season & { betCount: number }>>([]);
 
   const fetchStats = useCallback(async () => {
     if (!user) {
@@ -79,6 +90,16 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
+  const fetchUnreadInsights = useCallback(async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from('ai_insights')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false);
+    setUnreadInsights(count ?? 0);
+  }, [user]);
+
   useEffect(() => {
     fetchStats();
 
@@ -93,11 +114,34 @@ export default function ProfileScreen() {
     };
   }, [fetchStats]);
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchUnreadInsights();
+      (async () => {
+        try {
+          const raw = await AsyncStorage.getItem('recent_alerts');
+          if (!raw) { setTodayAlertCount(0); return; }
+          const alerts = JSON.parse(raw);
+          const today = new Date().toISOString().split('T')[0];
+          const count = alerts.filter((a: any) => a.timestamp?.startsWith(today)).length;
+          setTodayAlertCount(count);
+        } catch {
+          setTodayAlertCount(0);
+        }
+      })();
+      if (user) {
+        getAvailableReports(user.id)
+          .then(setAvailableReports)
+          .catch(() => setAvailableReports([]));
+      }
+    }, [fetchUnreadInsights, user])
+  );
+
   const handleSignOut = async () => {
     await signOut();
   };
 
-  const profitColor = profit === null || profit >= 0 ? colors.accent : '#E85D5D';
+  const profitColor = profit === null || profit >= 0 ? colors.accent : colors.loss;
 
   const menuItems = [
     { icon: 'person-outline', title: 'Account Settings', description: 'Manage Your Profile', route: '/account-settings' },
@@ -129,8 +173,8 @@ export default function ProfileScreen() {
                 <Ionicons name="person-outline" size={32} color={colors.iconSecondary} />
               </View>
               <View style={styles.userTextContainer}>
-                <Text style={styles.userName}>{user?.user_metadata?.full_name || 'John Trader'}</Text>
-                <Text style={styles.userEmail}>{user?.email || 'john.trader@email.com'}</Text>
+                <Text style={styles.userName} numberOfLines={1}>{user?.user_metadata?.full_name || 'John Trader'}</Text>
+                <Text style={styles.userEmail} numberOfLines={1}>{user?.email || 'john.trader@email.com'}</Text>
               </View>
             </View>
 
@@ -196,21 +240,149 @@ export default function ProfileScreen() {
             <Switch
               value={isDark}
               onValueChange={toggleTheme}
-              trackColor={{ false: '#1A1A1A', true: colors.accent }}
+              trackColor={{ false: colors.border, true: colors.accent }}
               thumbColor="#FFFFFF"
-              ios_backgroundColor="#1A1A1A"
+              ios_backgroundColor={colors.border}
             />
           </View>
         </FadeInView>
 
-        {/* Card 3 - Settings Menu Card */}
+        {/* AI Coach Card */}
+        <FadeInView delay={230} direction="bottom">
+          <AnimatedPressable
+            style={styles.settingCard}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/ai-coach'); }}
+            scaleDown={0.98}
+          >
+            <View style={styles.settingIconCircle}>
+              <Ionicons name="sparkles" size={22} color={colors.accent} />
+            </View>
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>AI Coach</Text>
+              <Text style={styles.settingDescription}>Personalized Betting Insights</Text>
+            </View>
+            {unreadInsights > 0 && (
+              <View style={styles.unreadDot} />
+            )}
+            <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+          </AnimatedPressable>
+        </FadeInView>
+
+        {/* Insights Card */}
+        <FadeInView delay={240} direction="bottom">
+          <AnimatedPressable
+            style={styles.settingCard}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/insights'); }}
+            scaleDown={0.98}
+          >
+            <View style={styles.settingIconCircle}>
+              <Ionicons name="bulb-outline" size={22} color={colors.accent} />
+            </View>
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Insights</Text>
+              <Text style={styles.settingDescription}>Smart Streaks & Pattern Alerts</Text>
+            </View>
+            {todayAlertCount > 0 && (
+              <View style={{
+                minWidth: 22, height: 22, borderRadius: 11,
+                backgroundColor: colors.accent, alignItems: 'center' as const,
+                justifyContent: 'center' as const, paddingHorizontal: 6, marginRight: 8,
+              }}>
+                <Text style={{ fontSize: 12, fontWeight: '700' as const, color: '#FFFFFF' }}>
+                  {todayAlertCount}
+                </Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+          </AnimatedPressable>
+        </FadeInView>
+
+        {/* Season Reports */}
+        <FadeInView delay={250} direction="bottom">
+          {availableReports.length > 0 ? (
+            <View>
+              {availableReports.map((report) => (
+                <AnimatedPressable
+                  key={`${report.sport}-${report.label}`}
+                  style={styles.settingCard}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({
+                      pathname: '/season-report',
+                      params: {
+                        sport: report.sport,
+                        seasonLabel: report.label,
+                        startDate: report.startDate,
+                        endDate: report.endDate,
+                      },
+                    });
+                  }}
+                  scaleDown={0.98}
+                >
+                  <View style={styles.settingIconCircle}>
+                    <Text style={{ fontSize: 22 }}>
+                      {SPORT_EMOJI[report.sport] || '\uD83C\uDFC6'}
+                    </Text>
+                  </View>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.settingTitle}>{report.label}</Text>
+                    <Text style={styles.settingDescription}>
+                      {report.betCount} bets analyzed
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textTertiary}
+                  />
+                </AnimatedPressable>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.settingCard}>
+              <View style={styles.settingIconCircle}>
+                <Ionicons
+                  name="trophy-outline"
+                  size={22}
+                  color={colors.iconSecondary}
+                />
+              </View>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Season Reports</Text>
+                <Text style={styles.settingDescription}>
+                  Your first season report will appear here when a season ends
+                </Text>
+              </View>
+            </View>
+          )}
+        </FadeInView>
+
+        {/* What-If Engine */}
         <FadeInView delay={260} direction="bottom">
+          <AnimatedPressable
+            style={styles.settingCard}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/what-if'); }}
+            scaleDown={0.98}
+          >
+            <View style={styles.settingIconCircle}>
+              <Ionicons name="git-branch-outline" size={22} color={colors.accent} />
+            </View>
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>What-If Engine</Text>
+              <Text style={styles.settingDescription}>Simulate Alternate Strategies</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+          </AnimatedPressable>
+        </FadeInView>
+
+        {/* Card 3 - Settings Menu Card */}
+        <FadeInView delay={280} direction="bottom">
           <View style={styles.menuCard}>
             {menuItems.map((item, index) => (
               <AnimatedPressable
                 key={item.route}
                 style={styles.menuRow}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(item.route as any); }}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(item.route); }}
                 scaleDown={0.98}
               >
                 <View style={styles.menuIconCircle}>
@@ -229,14 +401,14 @@ export default function ProfileScreen() {
         {/* Sign Out Button */}
         <FadeInView delay={380} direction="bottom">
           <AnimatedPressable style={styles.signOutButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleSignOut(); }} scaleDown={0.97}>
-            <Ionicons name="log-out-outline" size={20} color="#E85D5D" style={styles.signOutIcon} />
+            <Ionicons name="log-out-outline" size={20} color={colors.loss} style={styles.signOutIcon} />
             <Text style={styles.signOutText}>Sign Out</Text>
           </AnimatedPressable>
         </FadeInView>
 
         {/* Version Footer */}
         <FadeInView delay={440} direction="none">
-          <Text style={styles.versionText}>v1.0.0 // TERMINAL</Text>
+          <Text style={styles.versionText}>v1.0.0</Text>
         </FadeInView>
       </ScrollView>
     </SafeAreaView>
@@ -427,7 +599,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     signOutText: {
       fontSize: 16,
       fontWeight: '600',
-      color: '#E85D5D',
+      color: colors.loss,
     },
 
     versionText: {
@@ -437,6 +609,13 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       textAlign: 'center',
       letterSpacing: 0.8,
       marginTop: 2,
+    },
+    unreadDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.accent,
+      marginRight: 8,
     },
   });
 }

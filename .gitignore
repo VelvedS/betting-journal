@@ -41,3 +41,12 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Claude Code local config
+.claude/
+
+# Supabase CLI temp files
+supabase/.temp/
+
+# Debug backups
+*.backup

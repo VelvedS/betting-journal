@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
@@ -25,16 +25,19 @@ export default function TabScreenTransition({ children }: { children: React.Reac
   const [blurIntensity, setBlurIntensity] = useState(isFocused ? 0 : 20);
   const [showBlur, setShowBlur] = useState(!isFocused);
 
+  // Only show the blur defrost transition when *returning* to the tab,
+  // not on initial mount.  On first mount blurProgress starts at 0 and
+  // the animated reaction that calls hideBlur has already fired, so
+  // calling setShowBlur(true) would leave a zombie BlurView covering
+  // the screen and blocking all touches.
+  const hasUnfocused = useRef(false);
+
   const updateBlur = (value: number) => {
     setBlurIntensity(Math.round(value));
   };
 
   const hideBlur = () => {
     setShowBlur(false);
-  };
-
-  const revealBlur = () => {
-    setShowBlur(true);
   };
 
   useAnimatedReaction(
@@ -51,16 +54,19 @@ export default function TabScreenTransition({ children }: { children: React.Reac
     const timingConfig = { duration: DURATION, easing: Easing.out(Easing.cubic) };
 
     if (isFocused) {
-      setShowBlur(true);
+      if (hasUnfocused.current) {
+        setShowBlur(true);
+      }
       opacity.value = withDelay(DELAY, withTiming(1, timingConfig));
       scale.value = withDelay(DELAY, withTiming(1, timingConfig));
       blurProgress.value = withDelay(DELAY, withTiming(0, timingConfig));
     } else {
+      hasUnfocused.current = true;
       opacity.value = 0;
       scale.value = 0.95;
       blurProgress.value = 20;
-      runOnJS(revealBlur)();
-      runOnJS(updateBlur)(20);
+      setShowBlur(true);
+      setBlurIntensity(20);
     }
   }, [isFocused]);
 

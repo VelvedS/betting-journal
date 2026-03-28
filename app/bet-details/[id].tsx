@@ -4,11 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
   Animated,
   Alert,
+  Dimensions,
+  Platform,
+  ActionSheetIOS,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
+import { detectPatterns } from '@/lib/patternDetection';
 import RAnimated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -29,60 +32,80 @@ import { useTheme } from '@/context/ThemeContext';
 import * as Haptics from 'expo-haptics';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Dimensions } from 'react-native';
 import { usePreferences } from '@/context/PreferencesContext';
 import { formatCurrency, formatROI, formatOdds } from '@/lib/formatters';
+import { shouldSendNotification } from '@/lib/notifications';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type BetStatus = 'pending' | 'won' | 'lost' | 'void';
 type ToastState = { message: string; type: 'error' } | null;
 
-const getLegStatusStyle = (status: string) => {
-  switch (status) {
-    case 'won':
-      return { pillBg: 'rgba(45, 198, 114, 0.12)', pillText: '#2DC672' };
-    case 'lost':
-      return { pillBg: '#FFEBEE', pillText: '#FF3B30' };
-    default:
-      return { pillBg: '#F5F5F5', pillText: '#999999' };
-  }
-};
+interface ParlayLeg {
+  id: string;
+  bet_id: string;
+  description: string;
+  odds: number | null;
+  status: string;
+  order: number;
+  created_at: string;
+}
 
-const getStatusStyling = (status: string) => {
+const getStatusConfig = (status: string) => {
   switch (status) {
     case 'won':
       return {
-        bgColor: 'rgba(45, 198, 114, 0.12)',
-        textColor: '#2DC672',
-        iconName: 'trending-up' as const,
-        iconBg: 'rgba(45, 198, 114, 0.25)',
-        label: 'Win',
+        label: 'WIN',
+        heroColor: '#2DC672',
+        iconName: 'checkmark-circle' as const,
+        gradientColors: ['#2DC672', '#22A55E'] as [string, string],
       };
     case 'lost':
       return {
-        bgColor: '#FFECEC',
-        textColor: '#E85D5D',
-        iconName: 'trending-down' as const,
-        iconBg: '#FCA5A5',
-        label: 'Loss',
+        label: 'LOSS',
+        heroColor: '#E85D5D',
+        iconName: 'close-circle' as const,
+        gradientColors: ['#E85D5D', '#D04545'] as [string, string],
       };
     case 'void':
       return {
-        bgColor: '#F5F5F5',
-        textColor: '#999999',
+        label: 'VOID',
+        heroColor: '#6B7280',
         iconName: 'ban' as const,
-        iconBg: '#E5E5E5',
-        label: 'Void',
+        gradientColors: ['#6B7280', '#565D69'] as [string, string],
       };
     case 'pending':
     default:
       return {
-        bgColor: '#FFF5E0',
-        textColor: '#F5A623',
+        label: 'PENDING',
+        heroColor: '#F59E0B',
         iconName: 'time' as const,
-        iconBg: '#FDE68A',
-        label: 'Pending',
+        gradientColors: ['#F59E0B', '#D97706'] as [string, string],
       };
   }
+};
+
+const getLegStatusStyle = (status: string) => {
+  switch (status) {
+    case 'won':
+      return { pillBg: 'rgba(45, 198, 114, 0.12)', pillText: '#2DC672', borderColor: '#2DC672' };
+    case 'lost':
+      return { pillBg: 'rgba(232, 93, 93, 0.12)', pillText: '#E85D5D', borderColor: '#E85D5D' };
+    default:
+      return { pillBg: 'rgba(245, 158, 11, 0.12)', pillText: '#F59E0B', borderColor: '#F59E0B' };
+  }
+};
+
+const getReasoningIcon = (tag: string): React.ComponentProps<typeof Ionicons>['name'] => {
+  const lower = tag.toLowerCase();
+  if (lower.includes('revenge')) return 'flame';
+  if (lower.includes('value')) return 'cash-outline';
+  if (lower.includes('lock')) return 'lock-closed';
+  if (lower.includes('gut')) return 'flash';
+  if (lower.includes('research') || lower.includes('data')) return 'analytics';
+  if (lower.includes('trend')) return 'trending-up';
+  if (lower.includes('fade')) return 'trending-down';
+  return 'bulb-outline';
 };
 
 function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: boolean; onPress: () => void }) {
@@ -130,7 +153,7 @@ export default function BetDetailsScreen() {
   const { user, session } = useAuth();
   const { id } = useLocalSearchParams();
   const [bet, setBet] = useState<any>(null);
-  const [parlayLegs, setParlayLegs] = useState<any[]>([]);
+  const [parlayLegs, setParlayLegs] = useState<ParlayLeg[]>([]);
   const [betTags, setBetTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showStatusUpdate, setShowStatusUpdate] = useState(false);
@@ -144,6 +167,7 @@ export default function BetDetailsScreen() {
   const { width } = Dimensions.get('window');
 
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { currency, showBalance, oddsFormat } = usePreferences();
 
@@ -194,7 +218,7 @@ export default function BetDetailsScreen() {
     ]);
     if (betResult.data) setBet(betResult.data);
     if (legsResult.data) setParlayLegs(legsResult.data);
-    if (tagsResult.data) setBetTags(tagsResult.data.map((t: any) => t.tag));
+    if (tagsResult.data) setBetTags(tagsResult.data.map((t: { tag: string }) => t.tag));
     setLoading(false);
   }, [betId]);
 
@@ -215,6 +239,13 @@ export default function BetDetailsScreen() {
     }, 3000);
   }, [toastOpacity]);
 
+  // Cleanup toast timer on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
+
   const handleDeleteBet = useCallback(() => {
     Alert.alert(
       'Delete Bet',
@@ -232,9 +263,9 @@ export default function BetDetailsScreen() {
               if (error) throw error;
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               router.back();
-            } catch (err: any) {
+            } catch (err: unknown) {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-              showToast(err.message || 'Failed to delete bet');
+              showToast(err instanceof Error ? err.message : 'Failed to delete bet');
               setDeleting(false);
             }
           },
@@ -267,20 +298,82 @@ export default function BetDetailsScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
 
-      // Send push notification for won/lost results
+      // Send push notification for won/lost results (respects quiet hours)
       if ((newStatus === 'won' || newStatus === 'lost') && user?.id && session?.access_token) {
-        const notifTitle = newStatus === 'won' ? 'Bet Won! 🎉' : 'Bet Settled';
-        const notifBody = newStatus === 'won'
-          ? `Your ${bet.sportsbook} ${bet.bet_type} bet won! ${formatCurrency(bet.potential_payout, currency)} added to your record`
-          : `Your ${bet.sportsbook} ${bet.bet_type} bet has been marked as lost`;
-        supabase.functions.invoke('send-notification', {
-          body: { user_id: user.id, title: notifTitle, body: notifBody, data: { type: 'betResults' } },
-        }).catch((err) => console.error('[Push] Failed to send bet result notification:', err));
+        (async () => {
+          const canSend = await shouldSendNotification(user.id);
+          if (canSend) {
+            const notifTitle = newStatus === 'won' ? 'Bet Won! 🎉' : 'Bet Settled';
+            const notifBody = newStatus === 'won'
+              ? `Your ${bet.sportsbook} ${bet.bet_type} bet won! ${formatCurrency(bet.potential_payout, currency)} added to your record`
+              : `Your ${bet.sportsbook} ${bet.bet_type} bet has been marked as lost`;
+            supabase.functions.invoke('send-notification', {
+              body: { user_id: user.id, title: notifTitle, body: notifBody, data: { type: 'betResults', betId: bet.id } },
+            }).catch((err) => console.error('[Push] Failed to send bet result notification:', err));
+          }
+        })();
+
+        // Fire-and-forget pattern detection
+        detectPatterns(user.id, bet.id).catch((err) =>
+          console.warn('[PatternDetection] Error:', err),
+        );
       }
 
       setUpdatingStatus(false);
     }
   };
+
+  const handleEditBet = useCallback(() => {
+    if (!bet) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const betData: Record<string, string> = {
+      platform: bet.sportsbook || '',
+      bet_type: bet.bet_type || '',
+      sport: bet.sport || '',
+      matchup: bet.matchup || '',
+      description: bet.description || '',
+      odds: bet.odds || '',
+      odds_format: bet.odds_format || '',
+      wager: String(bet.wager || ''),
+      potential_payout: String(bet.potential_payout || ''),
+      status: bet.status || '',
+      date: bet.placed_at || '',
+      notes: bet.notes || '',
+      tags: JSON.stringify(betTags),
+      ticket_image_url: bet.ticket_image_url || '',
+      id: bet.id,
+      isEditing: 'true',
+      confidence_level: bet.confidence_level ? String(bet.confidence_level) : '',
+      reasoning_tag: bet.reasoning_tag || '',
+    };
+    if (parlayLegs.length > 0) {
+      betData.parlay_legs = JSON.stringify(parlayLegs);
+    }
+    router.push({ pathname: '/manual-add-bet', params: betData });
+  }, [bet, betTags, parlayLegs, router]);
+
+  const showMenu = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Edit Bet', 'Delete Bet', 'Cancel'],
+          destructiveButtonIndex: 1,
+          cancelButtonIndex: 2,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) handleEditBet();
+          else if (buttonIndex === 1) handleDeleteBet();
+        }
+      );
+    } else {
+      Alert.alert('', undefined, [
+        { text: 'Edit Bet', onPress: handleEditBet },
+        { text: 'Delete Bet', style: 'destructive', onPress: handleDeleteBet },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  }, [handleEditBet, handleDeleteBet]);
 
   // Skeleton shimmer animation
   const skeletonAnim = useRef(new Animated.Value(0)).current;
@@ -298,49 +391,34 @@ export default function BetDetailsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style={colors.statusBar} />
-        <View style={styles.scrollContent}>
-          {/* Header skeleton */}
-          <View style={styles.header}>
-            <Animated.View style={[styles.skeletonCircle, { opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
-            <Animated.View style={[styles.skeletonBar, { width: 120, height: 24, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
-          </View>
-          {/* Status banner skeleton */}
-          <Animated.View style={[styles.skeletonBlock, { height: 120, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
-          {/* Stat row skeleton */}
-          <View style={[styles.statsRow, { marginTop: 16 }]}>
-            <Animated.View style={[styles.skeletonBlock, { flex: 1, height: 60, marginRight: 8, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
-            <Animated.View style={[styles.skeletonBlock, { flex: 1, height: 60, marginRight: 8, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
-            <Animated.View style={[styles.skeletonBlock, { flex: 1, height: 60, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
-          </View>
-          {/* Details card skeleton */}
-          <Animated.View style={[styles.skeletonBlock, { height: 180, marginTop: 16, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
-          {/* Button skeletons */}
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-            <Animated.View style={[styles.skeletonPill, { flex: 1, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
-            <Animated.View style={[styles.skeletonPill, { flex: 1, opacity: skeletonOpacity, backgroundColor: colors.surface }]} />
-          </View>
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <Animated.View style={{ height: insets.top + 180, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, backgroundColor: colors.surface, opacity: skeletonOpacity }} />
+        <Animated.View style={{ height: 48, borderRadius: 12, marginHorizontal: 16, marginTop: 16, backgroundColor: colors.surface, opacity: skeletonOpacity }} />
+        <Animated.View style={{ height: 280, borderRadius: 20, marginHorizontal: 16, marginTop: 20, backgroundColor: colors.surface, opacity: skeletonOpacity }} />
+        <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 16, marginTop: 24 }}>
+          <Animated.View style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: colors.surface, opacity: skeletonOpacity }} />
+          <Animated.View style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: colors.surface, opacity: skeletonOpacity }} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!bet) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style={colors.statusBar} />
+      <View style={styles.container}>
+        <StatusBar style="light" />
         <View style={styles.loadingContainer}>
           <Text style={{ fontSize: 16, color: colors.textSecondary }}>Bet not found</Text>
           <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
-            <Text style={{ fontSize: 16, color: '#6366F1', fontWeight: '600' }}>Go Back</Text>
+            <Text style={{ fontSize: 16, color: colors.ai, fontWeight: '600' }}>Go Back</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
-  const statusStyle = getStatusStyling(bet.status);
+  const statusConfig = getStatusConfig(bet.status);
   const betType = bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : '';
 
   const roiPctNum = !bet.wager || bet.wager <= 0 ? 0
@@ -352,54 +430,66 @@ export default function BetDetailsScreen() {
   }) : '';
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style={colors.statusBar} />
+    <View style={styles.container}>
+      <StatusBar style="light" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <FadeInView delay={0} direction="bottom">
-          <View style={styles.header}>
-            <AnimatedPressable
-              style={styles.backButton}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
-              scaleDown={0.9}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </AnimatedPressable>
-            <Text style={styles.headerTitle}>Bet Details</Text>
-          </View>
-        </FadeInView>
+        {/* Full-Bleed Status Hero with floating nav */}
+        <FadeInView delay={0} direction="none">
+          <LinearGradient
+            colors={statusConfig.gradientColors}
+            style={[styles.statusHero, { paddingTop: insets.top }]}
+          >
+            {/* Floating Nav Row */}
+            <View style={styles.heroNavRow}>
+              <AnimatedPressable
+                style={styles.heroNavButton}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
+                scaleDown={0.9}
+              >
+                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              </AnimatedPressable>
+              <View style={{ flex: 1 }} />
+              <AnimatedPressable
+                style={styles.heroNavButton}
+                onPress={showMenu}
+                scaleDown={0.9}
+              >
+                <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
+              </AnimatedPressable>
+            </View>
 
-        {/* Status Banner Card */}
-        <FadeInView delay={80} direction="bottom">
-          <View style={[styles.statusBanner, { backgroundColor: statusStyle.bgColor }]}>
-            <View style={styles.statusHeader}>
+            {/* Status Content */}
+            <View style={styles.statusHeroContent}>
               <View>
-                <Text style={styles.statusLabel}>STATUS</Text>
-                <Text style={[styles.statusValue, { color: statusStyle.textColor }]}>
-                  {statusStyle.label}
-                </Text>
-                <Text style={styles.statusDate}>{dateStr}</Text>
+                <RAnimated.View style={bet.status === 'pending' ? pendingPulseStyle : undefined}>
+                  <Text style={styles.statusHeroLabel}>
+                    {statusConfig.label}
+                  </Text>
+                </RAnimated.View>
+                <Text style={styles.statusHeroDate}>{dateStr}</Text>
               </View>
               <RAnimated.View style={bet.status === 'pending' ? pendingPulseStyle : undefined}>
-                <View style={[styles.statusIconCircle, { backgroundColor: statusStyle.iconBg }]}>
-                  <Ionicons name={statusStyle.iconName} size={24} color={statusStyle.textColor} />
-                </View>
+                <Ionicons
+                  name={statusConfig.iconName}
+                  size={52}
+                  color="rgba(255, 255, 255, 0.25)"
+                />
               </RAnimated.View>
             </View>
-          </View>
+          </LinearGradient>
         </FadeInView>
 
         {/* Update Status Button */}
-        <FadeInView delay={140} direction="none">
+        <FadeInView delay={80} direction="none">
           <AnimatedPressable
             style={styles.updateStatusButton}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowStatusUpdate(!showStatusUpdate); }}
             scaleDown={0.95}
           >
-            <Ionicons name="swap-horizontal" size={16} color={colors.text} />
+            <Ionicons name="swap-horizontal-outline" size={16} color={colors.text} />
             <Text style={styles.updateStatusText}>Update Status</Text>
           </AnimatedPressable>
         </FadeInView>
@@ -419,155 +509,208 @@ export default function BetDetailsScreen() {
                 ))}
               </View>
               {updatingStatus && (
-                <ActivityIndicator size="small" color="#6366F1" style={{ marginTop: 8 }} />
+                <ActivityIndicator size="small" color={colors.ai} style={{ marginTop: 8 }} />
               )}
             </View>
           </FadeInView>
         )}
 
-        {/* Sportsbook & Wager Info Card */}
-        <FadeInView delay={160} direction="bottom">
-          <View style={styles.infoCard}>
-            <View style={styles.sportsbookHeader}>
-              <View style={styles.sportsbookIcon}>
-                <Ionicons name="logo-usd" size={22} color={colors.accent} />
+        {/* THE TICKET CARD */}
+        <FadeInView delay={100} direction="bottom" offset={30}>
+          <View style={styles.ticketCard}>
+            {/* Ticket Header */}
+            <View style={styles.ticketHeader}>
+              <View style={styles.ticketHeaderLeft}>
+                <View style={[styles.sportsbookIconCircle, { backgroundColor: colors.accentBg }]}>
+                  <Ionicons name="logo-usd" size={22} color={colors.accent} />
+                </View>
+                <View>
+                  <Text style={styles.sportsbookName}>{bet.sportsbook || 'Unknown'}</Text>
+                  <Text style={styles.sportsbookType}>{betType}</Text>
+                </View>
               </View>
-              <View style={styles.sportsbookInfo}>
-                <Text style={styles.sportsbookName}>{bet.sportsbook || 'Unknown'}</Text>
-                <Text style={styles.sportsbookType}>{betType}</Text>
-              </View>
+              <Text style={styles.betIdText}>#{bet.id.substring(0, 4)}</Text>
             </View>
 
-            <View style={styles.divider} />
+            {/* Ticket Tear Divider */}
+            <View style={styles.ticketDividerContainer}>
+              <View style={[styles.ticketDashedLine, { borderColor: colors.border }]} />
+              <View style={[styles.ticketCutout, styles.ticketCutoutLeft, { backgroundColor: colors.background }]} />
+              <View style={[styles.ticketCutout, styles.ticketCutoutRight, { backgroundColor: colors.background }]} />
+            </View>
 
-            <View style={styles.statsRow}>
-              <View style={styles.statColumn}>
-                <Text style={styles.statLabel}>WAGER</Text>
-                <Text style={styles.statValue}>{formatCurrency(bet.wager, currency, showBalance)}</Text>
+            {/* Ticket Body */}
+            <View style={styles.ticketBody}>
+              {/* Row 1: Big Numbers */}
+              <View style={styles.bigNumbersRow}>
+                <View style={styles.bigNumberCol}>
+                  <Text style={styles.bigNumberLabel}>WAGER</Text>
+                  <Text style={styles.bigNumberValue}>{formatCurrency(bet.wager, currency, showBalance)}</Text>
+                </View>
+                <View style={styles.bigNumberCol}>
+                  <Text style={styles.bigNumberLabel}>PAYOUT</Text>
+                  <Text style={styles.bigNumberValue}>{formatCurrency(bet.potential_payout || 0, currency, showBalance)}</Text>
+                </View>
+                <View style={[styles.bigNumberCol, { alignItems: 'flex-end' }]}>
+                  <Text style={styles.bigNumberLabel}>ROI</Text>
+                  <Text style={[styles.bigNumberValue, { color: roiPctNum < 0 ? colors.loss : colors.accent }]}>
+                    {formatROI(roiPctNum)}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.statColumn}>
-                <Text style={styles.statLabel}>PAYOUT</Text>
-                <Text style={styles.statValue}>{formatCurrency(bet.potential_payout || 0, currency, showBalance)}</Text>
-              </View>
-              <View style={[styles.statColumn, styles.statColumnRight]}>
-                <Text style={styles.statLabel}>ROI</Text>
-                <Text style={[styles.roiValue, { color: roiPctNum < 0 ? '#E85D5D' : colors.accent }]}>{formatROI(roiPctNum)}</Text>
-              </View>
+
+              {/* Row 2: Details Grid */}
+              {(bet.odds || bet.sport || (parlayLegs.length === 0 && bet.description)) && (
+                <>
+                  <View style={styles.thinDivider} />
+                  <View style={styles.detailsGrid}>
+                    {(bet.odds || bet.sport) && (
+                      <View style={styles.detailsRow}>
+                        {bet.odds && (
+                          <View style={styles.detailItem}>
+                            <Text style={styles.detailLabel}>ODDS</Text>
+                            <Text style={styles.detailValue}>{formatOdds(bet.odds, oddsFormat)}</Text>
+                          </View>
+                        )}
+                        {bet.sport && (
+                          <View style={styles.detailItem}>
+                            <Text style={styles.detailLabel}>SPORT</Text>
+                            <Text style={styles.detailValue}>{bet.sport}</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                    {parlayLegs.length === 0 && bet.description && (
+                      <View style={styles.detailItemFull}>
+                        <Text style={styles.detailLabel}>PICK</Text>
+                        <Text style={styles.detailValue}>{bet.description}</Text>
+                        {bet.matchup ? (
+                          <Text style={[styles.detailValue, { color: colors.textTertiary, fontSize: 13, marginTop: 2 }]}>
+                            {bet.matchup}
+                          </Text>
+                        ) : null}
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {/* Row 3: Gut Check Data */}
+              {(bet.confidence_level > 0 || bet.reasoning_tag) && (
+                <>
+                  <View style={styles.thinDivider} />
+                  <View style={styles.gutCheckSection}>
+                    {bet.confidence_level > 0 && (
+                      <View>
+                        <Text style={styles.detailLabel}>CONFIDENCE</Text>
+                        <View style={styles.starsRow}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Ionicons
+                              key={star}
+                              name={star <= bet.confidence_level ? 'star' : 'star-outline'}
+                              size={18}
+                              color={star <= bet.confidence_level ? colors.star : colors.textTertiary}
+                            />
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                    {bet.reasoning_tag && (
+                      <View>
+                        <Text style={styles.detailLabel}>REASONING</Text>
+                        <View style={[styles.reasoningPill, { backgroundColor: colors.accentBg }]}>
+                          <Ionicons name={getReasoningIcon(bet.reasoning_tag)} size={14} color={colors.accent} />
+                          <Text style={[styles.reasoningText, { color: colors.accent }]}>{bet.reasoning_tag}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </FadeInView>
 
-        {/* Pick — only shown when there are no parlay legs */}
-        {parlayLegs.length === 0 && (
-          <FadeInView delay={220} direction="bottom">
-            <View style={styles.notesCard}>
-              <View style={styles.notesHeader}>
-                <Ionicons name="baseball-outline" size={20} color="#6366F1" />
-                <Text style={styles.notesTitle}>Pick</Text>
-              </View>
-              <Text style={styles.notesText}>{bet.description || '—'}</Text>
-              {bet.matchup ? <Text style={[styles.notesText, { marginTop: 4, color: colors.textTertiary }]}>{bet.matchup}</Text> : null}
-            </View>
-          </FadeInView>
-        )}
-
-        {/* Parlay Legs — shown whenever valid legs exist */}
+        {/* Parlay Legs Section */}
         {parlayLegs.length > 0 && (
-          <FadeInView delay={280} direction="bottom">
-            <View style={styles.parlayLegsCard}>
-              <View style={styles.parlayLegsHeader}>
-                <Text style={styles.parlayLegsTitle}>Parlay Legs</Text>
-                <Text style={styles.parlayLegsCount}> ({parlayLegs.length})</Text>
+          <FadeInView delay={200} direction="bottom" offset={30}>
+            <View style={styles.parlayCard}>
+              {/* Card Header */}
+              <View style={styles.parlayCardHeader}>
+                <Text style={styles.parlayCardTitle}>Parlay Legs</Text>
+                <Text style={styles.parlayCardCount}>({parlayLegs.length})</Text>
               </View>
-              {parlayLegs.map((leg: any, index: number) => {
+
+              {/* Ticket Tear Divider */}
+              <View style={styles.ticketDividerContainer}>
+                <View style={[styles.ticketDashedLine, { borderColor: colors.border }]} />
+                <View style={[styles.ticketCutout, styles.ticketCutoutLeft, { backgroundColor: colors.background }]} />
+                <View style={[styles.ticketCutout, styles.ticketCutoutRight, { backgroundColor: colors.background }]} />
+              </View>
+
+              {/* Legs List */}
+              {parlayLegs.map((leg, index) => {
                 const legStyle = getLegStatusStyle(leg.status);
                 return (
-                  <FadeInView key={leg.id ?? index} delay={index * 80} direction="bottom">
-                    <View style={styles.legCard}>
-                      <View style={styles.legCardInner}>
-                        <View style={styles.legInfo}>
-                          <Text style={styles.legDescription}>{leg.description}</Text>
+                  <View key={leg.id ?? index}>
+                    <View style={styles.legRow}>
+                      <View style={[styles.legStatusBar, { backgroundColor: legStyle.borderColor }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.legDescription}>{leg.description}</Text>
+                        {leg.odds ? (
                           <Text style={styles.legOdds}>{formatOdds(leg.odds, oddsFormat)}</Text>
-                        </View>
-                        <View style={[styles.legStatusPill, { backgroundColor: legStyle.pillBg }]}>
-                          <Text style={[styles.legStatusText, { color: legStyle.pillText }]}>
-                            {leg.status === 'won' ? 'Win' : leg.status === 'lost' ? 'Loss' : 'Pending'}
-                          </Text>
-                        </View>
+                        ) : null}
+                      </View>
+                      <View style={[styles.legStatusPill, { backgroundColor: legStyle.pillBg }]}>
+                        <Text style={[styles.legStatusText, { color: legStyle.pillText }]}>
+                          {leg.status === 'won' ? 'Win' : leg.status === 'lost' ? 'Loss' : 'Pending'}
+                        </Text>
                       </View>
                     </View>
-                  </FadeInView>
+                    {index < parlayLegs.length - 1 && (
+                      <View style={styles.legDivider} />
+                    )}
+                  </View>
                 );
               })}
+              <View style={{ height: 8 }} />
             </View>
           </FadeInView>
         )}
 
-        {/* Notes Card */}
+        {/* Notes Section */}
         {bet.notes ? (
-          <FadeInView delay={360} direction="bottom">
+          <FadeInView delay={350} direction="bottom">
             <View style={styles.notesCard}>
-              <View style={styles.notesHeader}>
-                <Ionicons name="document-text-outline" size={20} color="#6366F1" />
-                <Text style={styles.notesTitle}>Notes</Text>
-              </View>
+              <Text style={styles.detailLabel}>NOTES</Text>
               <Text style={styles.notesText}>{bet.notes}</Text>
             </View>
           </FadeInView>
         ) : null}
 
-        {/* Edit Bet */}
-        <FadeInView delay={420} direction="bottom">
-          <AnimatedPressable
-            style={styles.editButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              const betData: Record<string, string> = {
-                platform: bet.sportsbook || '',
-                bet_type: bet.bet_type || '',
-                sport: bet.sport || '',
-                matchup: bet.matchup || '',
-                description: bet.description || '',
-                odds: bet.odds || '',
-                odds_format: bet.odds_format || '',
-                wager: String(bet.wager || ''),
-                potential_payout: String(bet.potential_payout || ''),
-                status: bet.status || '',
-                date: bet.placed_at || '',
-                notes: bet.notes || '',
-                tags: JSON.stringify(betTags),
-                ticket_image_url: bet.ticket_image_url || '',
-                id: bet.id,
-                isEditing: 'true',
-              };
-              if (parlayLegs.length > 0) {
-                betData.parlay_legs = JSON.stringify(parlayLegs);
-              }
-              router.push({ pathname: '/manual-add-bet', params: betData });
-            }}
-            scaleDown={0.96}
-          >
-            <Ionicons name="create-outline" size={20} color={colors.accent} />
-            <Text style={styles.editButtonText}>Edit Bet</Text>
-          </AnimatedPressable>
-        </FadeInView>
-
-        {/* Delete Bet */}
-        <FadeInView delay={440} direction="bottom">
-          <AnimatedPressable
-            style={[styles.deleteButton, deleting && styles.deleteButtonDisabled]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleDeleteBet(); }}
-            scaleDown={0.97}
-            disabled={deleting}
-          >
-            {deleting
-              ? <ActivityIndicator size="small" color="#E85D5D" style={{ marginRight: 8 }} />
-              : <Ionicons name="trash-outline" size={18} color="#E85D5D" style={{ marginRight: 8 }} />
-            }
-            <Text style={styles.deleteButtonText}>
-              {deleting ? 'Deleting…' : 'Delete Bet'}
-            </Text>
-          </AnimatedPressable>
+        {/* Action Buttons */}
+        <FadeInView delay={400} direction="bottom">
+          <View style={styles.actionButtonsRow}>
+            <AnimatedPressable
+              style={styles.editButton}
+              onPress={handleEditBet}
+              scaleDown={0.96}
+            >
+              <Text style={[styles.editButtonText, { color: colors.accent }]}>Edit Bet</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.deleteButton, deleting && { opacity: 0.5 }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleDeleteBet(); }}
+              scaleDown={0.96}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <ActivityIndicator size="small" color="rgba(232, 93, 93, 0.7)" />
+              ) : (
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              )}
+            </AnimatedPressable>
+          </View>
         </FadeInView>
       </ScrollView>
 
@@ -590,7 +733,7 @@ export default function BetDetailsScreen() {
         fallSpeed={2500}
         colors={['#2DC672', '#FFD700', '#FFFFFF', '#2DC672', '#FCD34D']}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -606,73 +749,59 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       justifyContent: 'center',
     },
     scrollContent: {
-      paddingHorizontal: 20,
-      paddingTop: 20,
       paddingBottom: 100,
     },
-    header: {
+    /* Full-Bleed Status Hero */
+    statusHero: {
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+      overflow: 'hidden',
+    },
+    heroNavRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 24,
-      gap: 12,
+      paddingHorizontal: 16,
+      paddingTop: 8,
     },
-    backButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.surface,
+    heroNavButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
     },
-    headerTitle: {
-      fontSize: 24,
-      fontWeight: '700',
-      color: colors.text,
-    },
-    statusBanner: {
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 8,
-    },
-    statusHeader: {
+    statusHeroContent: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'flex-start',
-    },
-    statusLabel: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: colors.textSecondary,
-      letterSpacing: 0.5,
-      marginBottom: 6,
-    },
-    statusValue: {
-      fontSize: 32,
-      fontWeight: '700',
-      marginBottom: 8,
-    },
-    statusDate: {
-      fontSize: 14,
-      color: colors.textSecondary,
-    },
-    statusIconCircle: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
       alignItems: 'center',
-      justifyContent: 'center',
+      paddingHorizontal: 24,
+      paddingTop: 16,
+      paddingBottom: 28,
     },
+    statusHeroLabel: {
+      fontSize: 36,
+      fontWeight: '800',
+      letterSpacing: 2,
+      color: '#FFFFFF',
+    },
+    statusHeroDate: {
+      fontSize: 13,
+      color: 'rgba(255, 255, 255, 0.7)',
+      marginTop: 8,
+    },
+    /* Update Status */
     updateStatusButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 6,
-      paddingVertical: 12,
-      marginBottom: 8,
+      height: 48,
+      marginHorizontal: 16,
+      marginTop: 20,
+      marginBottom: 20,
       backgroundColor: colors.surface,
-      borderRadius: 10,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -682,216 +811,282 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       color: colors.text,
     },
     updateStatusContainer: {
+      marginHorizontal: 16,
       backgroundColor: colors.surface,
       borderRadius: 12,
       padding: 16,
       marginBottom: 16,
-      boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
-      elevation: 2,
       alignItems: 'center',
     },
     updatePillsRow: {
       flexDirection: 'row',
       gap: 10,
     },
-    updatePill: {
-      borderRadius: 9,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      height: 38,
-      justifyContent: 'center',
-    },
-    updatePillText: {
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    infoCard: {
+    /* Ticket Card */
+    ticketCard: {
+      marginHorizontal: 16,
       backgroundColor: colors.surface,
-      borderRadius: 12,
-      padding: 20,
-      marginBottom: 16,
-      boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
-      elevation: 2,
+      borderRadius: 20,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 4,
     },
-    sportsbookHeader: {
+    ticketHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      paddingHorizontal: 24,
+      paddingTop: 24,
+      paddingBottom: 20,
+    },
+    ticketHeaderLeft: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 14,
     },
-    sportsbookIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: colors.accentBg,
+    sportsbookIconCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    sportsbookInfo: {
-      flex: 1,
     },
     sportsbookName: {
       fontSize: 18,
       fontWeight: '700',
       color: colors.text,
-      marginBottom: 2,
     },
     sportsbookType: {
-      fontSize: 14,
+      fontSize: 13,
       color: colors.textSecondary,
+      marginTop: 2,
     },
-    divider: {
-      height: 1,
-      backgroundColor: colors.border,
-      marginVertical: 16,
+    betIdText: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 4,
     },
-    statsRow: {
+    /* Ticket Tear Divider */
+    ticketDividerContainer: {
+      position: 'relative',
+    },
+    ticketDashedLine: {
+      borderBottomWidth: 1.5,
+      borderStyle: 'dashed',
+      marginHorizontal: 24,
+    },
+    ticketCutout: {
+      position: 'absolute',
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      top: -10,
+    },
+    ticketCutoutLeft: {
+      left: -10,
+    },
+    ticketCutoutRight: {
+      right: -10,
+    },
+    /* Ticket Body */
+    ticketBody: {
+      paddingHorizontal: 24,
+      paddingVertical: 20,
+    },
+    bigNumbersRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
     },
-    statColumn: {
+    bigNumberCol: {
       flex: 1,
     },
-    statColumnRight: {
-      alignItems: 'flex-end',
-    },
-    statLabel: {
+    bigNumberLabel: {
       fontSize: 10,
       fontWeight: '600',
-      color: colors.textTertiary,
-      letterSpacing: 0.5,
-      marginBottom: 6,
-    },
-    statValue: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: colors.text,
-    },
-    roiValue: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: colors.accent,
-    },
-    notesCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 12,
-      padding: 20,
-      marginBottom: 16,
-      boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
-      elevation: 2,
-    },
-    notesHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginBottom: 12,
-    },
-    notesTitle: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: colors.text,
-    },
-    notesText: {
-      fontSize: 14,
-      lineHeight: 22,
-      color: colors.textSecondary,
-    },
-    parlayLegsCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: 20,
-      marginBottom: 16,
-      boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
-      elevation: 2,
-    },
-    parlayLegsHeader: {
-      flexDirection: 'row',
-      alignItems: 'baseline',
-      marginBottom: 16,
-    },
-    parlayLegsTitle: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: colors.text,
-    },
-    parlayLegsCount: {
-      fontSize: 14,
-      fontWeight: '400',
+      letterSpacing: 1,
       color: colors.textTertiary,
     },
-    legCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: 10,
+    bigNumberValue: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: colors.text,
+      marginTop: 8,
     },
-    legCardInner: {
+    thinDivider: {
+      height: 1,
+      backgroundColor: colors.border + '66',
+      marginVertical: 20,
+    },
+    detailsGrid: {
+      gap: 16,
+    },
+    detailsRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 16,
+      gap: 24,
     },
-    legInfo: {
+    detailItem: {
       flex: 1,
-      marginRight: 12,
     },
-    legDescription: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: colors.text,
-      marginBottom: 4,
+    detailItemFull: {
+      width: '100%',
     },
-    legOdds: {
-      fontSize: 14,
-      fontWeight: '400',
+    detailLabel: {
+      fontSize: 10,
+      fontWeight: '600',
+      letterSpacing: 1,
       color: colors.textTertiary,
+      textTransform: 'uppercase',
     },
-    legStatusPill: {
-      borderRadius: 20,
-      paddingHorizontal: 14,
+    detailValue: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+      marginTop: 6,
+    },
+    gutCheckSection: {
+      gap: 16,
+    },
+    starsRow: {
+      flexDirection: 'row',
+      gap: 2,
+      marginTop: 8,
+    },
+    reasoningPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
       paddingVertical: 6,
+      borderRadius: 8,
+      alignSelf: 'flex-start',
+      marginTop: 8,
     },
-    legStatusText: {
+    reasoningText: {
       fontSize: 13,
       fontWeight: '600',
     },
-    editButton: {
+    /* Parlay Legs */
+    parlayCard: {
+      marginHorizontal: 16,
+      marginTop: 20,
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    parlayCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 24,
+      paddingVertical: 20,
+    },
+    parlayCardTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    parlayCardCount: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    legRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
+      paddingHorizontal: 24,
+      paddingVertical: 16,
+    },
+    legStatusBar: {
+      width: 4,
+      alignSelf: 'stretch',
+      borderRadius: 2,
+      marginRight: 14,
+    },
+    legDescription: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+      lineHeight: 20,
+    },
+    legOdds: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    legStatusPill: {
+      paddingHorizontal: 14,
+      paddingVertical: 5,
+      borderRadius: 8,
+      marginLeft: 12,
+    },
+    legStatusText: {
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    legDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      opacity: 0.3,
+      marginHorizontal: 24,
+    },
+    /* Notes */
+    notesCard: {
+      marginHorizontal: 16,
+      marginTop: 16,
       backgroundColor: colors.surface,
+      borderRadius: 14,
+      padding: 16,
+    },
+    notesText: {
+      fontSize: 14,
+      color: colors.text,
+      lineHeight: 20,
+      marginTop: 8,
+    },
+    /* Action Buttons */
+    actionButtonsRow: {
+      flexDirection: 'row',
+      marginHorizontal: 16,
+      marginTop: 24,
+      gap: 10,
+    },
+    editButton: {
+      flex: 1,
+      height: 44,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.accent,
-      height: 50,
-      marginBottom: 12,
-    },
-    editButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.accent,
-    },
-    deleteButton: {
-      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',
+    },
+    editButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+    },
+    deleteButton: {
+      flex: 1,
+      height: 44,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: '#E85D5D',
-      paddingVertical: 14,
-    },
-    deleteButtonDisabled: {
-      opacity: 0.5,
+      borderColor: 'rgba(232, 93, 93, 0.5)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'transparent',
     },
     deleteButtonText: {
       fontSize: 15,
-      fontWeight: '700',
-      color: '#E85D5D',
+      fontWeight: '600',
+      color: 'rgba(232, 93, 93, 0.7)',
     },
+    /* Toast */
     toast: {
       position: 'absolute',
       bottom: 40,
@@ -914,21 +1109,6 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       fontWeight: '600',
       color: '#FFFFFF',
       flex: 1,
-    },
-    skeletonCircle: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-    },
-    skeletonBar: {
-      borderRadius: 8,
-    },
-    skeletonBlock: {
-      borderRadius: 16,
-    },
-    skeletonPill: {
-      height: 48,
-      borderRadius: 24,
     },
   });
 }

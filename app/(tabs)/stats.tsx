@@ -22,8 +22,20 @@ import { usePreferences } from '@/context/PreferencesContext';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import * as Haptics from 'expo-haptics';
 import FadeInView from '@/components/FadeInView';
+import CalendarHeatMap from '@/components/CalendarHeatMap';
 
 type FilterType = 'All' | 'Wins' | 'Losses' | 'Pending';
+
+const REASONING_TAGS: { label: string; value: string; icon: string }[] = [
+  { label: 'Stats', value: 'stats', icon: 'analytics-outline' },
+  { label: 'Value', value: 'value', icon: 'diamond-outline' },
+  { label: 'Gut Feel', value: 'gut_feel', icon: 'flash-outline' },
+  { label: 'Revenge', value: 'revenge', icon: 'flame-outline' },
+  { label: 'Fade', value: 'fade', icon: 'arrow-down-outline' },
+  { label: 'Tail', value: 'tail', icon: 'people-outline' },
+  { label: 'System', value: 'system', icon: 'code-slash-outline' },
+  { label: 'Hedge', value: 'hedge', icon: 'shield-outline' },
+];
 
 const getStatusConfig = (status: string) => {
   switch (status) {
@@ -47,12 +59,13 @@ export default function StatsScreen() {
 
   const fetchBets = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('bets')
       .select('*')
       .eq('user_id', user.id)
       .order('placed_at', { ascending: false })
       .order('created_at', { ascending: false });
+    if (error) console.error('[Stats] fetch error:', error);
     setAllBets(data || []);
   }, [user]);
 
@@ -141,6 +154,76 @@ export default function StatsScreen() {
   const roiStr = formatROI(roiValue);
 
   const subtitleText = filteredCount === 1 ? '1 Total Bet' : `${filteredCount} Total Bets`;
+
+  // ── Confidence breakdown ──
+  const confidenceBreakdown = useMemo(() => {
+    const settled = allBets.filter(
+      (b) => (b.status === 'won' || b.status === 'lost') && b.confidence_level != null
+    );
+    const groups: Record<number, { wins: number; losses: number; wagered: number; profit: number }> = {};
+    settled.forEach((bet) => {
+      const level = bet.confidence_level as number;
+      if (!groups[level]) groups[level] = { wins: 0, losses: 0, wagered: 0, profit: 0 };
+      const g = groups[level];
+      g.wagered += bet.wager || 0;
+      if (bet.status === 'won') {
+        g.wins++;
+        g.profit += (bet.potential_payout || 0) - (bet.wager || 0);
+      } else {
+        g.losses++;
+        g.profit -= bet.wager || 0;
+      }
+    });
+    return Object.entries(groups)
+      .map(([level, data]) => ({
+        level: parseInt(level),
+        ...data,
+        roi: data.wagered > 0 ? (data.profit / data.wagered) * 100 : 0,
+      }))
+      .sort((a, b) => a.level - b.level);
+  }, [allBets]);
+
+  // ── Reasoning breakdown ──
+  const reasoningBreakdown = useMemo(() => {
+    const settled = allBets.filter(
+      (b) => (b.status === 'won' || b.status === 'lost') && b.reasoning_tag != null
+    );
+    const groups: Record<string, { wins: number; losses: number; wagered: number; profit: number }> = {};
+    settled.forEach((bet) => {
+      const tag = bet.reasoning_tag as string;
+      if (!groups[tag]) groups[tag] = { wins: 0, losses: 0, wagered: 0, profit: 0 };
+      const g = groups[tag];
+      g.wagered += bet.wager || 0;
+      if (bet.status === 'won') {
+        g.wins++;
+        g.profit += (bet.potential_payout || 0) - (bet.wager || 0);
+      } else {
+        g.losses++;
+        g.profit -= bet.wager || 0;
+      }
+    });
+    return Object.entries(groups)
+      .map(([tag, data]) => ({
+        tag,
+        ...data,
+        roi: data.wagered > 0 ? (data.profit / data.wagered) * 100 : 0,
+        label: REASONING_TAGS.find((t) => t.value === tag)?.label || tag,
+        icon: REASONING_TAGS.find((t) => t.value === tag)?.icon || 'help-outline',
+      }))
+      .sort((a, b) => b.roi - a.roi);
+  }, [allBets]);
+
+  const renderStars = (count: number) => {
+    return Array.from({ length: 5 }, (_, i) => (
+      <Ionicons
+        key={i}
+        name={i < count ? 'star' : 'star-outline'}
+        size={14}
+        color={i < count ? colors.star : colors.textTertiary}
+        style={{ marginRight: 1 }}
+      />
+    ));
+  };
 
   return (
     <TabScreenTransition>
@@ -281,6 +364,19 @@ export default function StatsScreen() {
           </FadeInView>
         </Animated.View>
 
+        {/* What-If Button */}
+        <FadeInView delay={120} direction="bottom">
+          <TouchableOpacity
+            style={styles.whatIfLink}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/what-if'); }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="git-branch-outline" size={16} color={colors.accent} />
+            <Text style={styles.whatIfLinkText}>What If?</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.accent} />
+          </TouchableOpacity>
+        </FadeInView>
+
         {/* Filter Tabs */}
         <FadeInView delay={440} direction="none">
           <ScrollView
@@ -317,6 +413,117 @@ export default function StatsScreen() {
           </ScrollView>
         </FadeInView>
 
+        {/* ── Daily Activity Heat Map ── */}
+        <FadeInView delay={450} direction="bottom">
+          <CalendarHeatMap bets={allBets} />
+        </FadeInView>
+
+        {/* ── By Confidence ── */}
+        <FadeInView delay={460} direction="bottom">
+          <View style={styles.breakdownCard}>
+            <View style={styles.breakdownHeader}>
+              <Ionicons name="star" size={18} color={colors.star} />
+              <Text style={styles.breakdownTitle}>By Confidence</Text>
+            </View>
+            {confidenceBreakdown.length > 0 ? (
+              confidenceBreakdown.map((row) => (
+                <View key={row.level} style={styles.breakdownRow}>
+                  <View style={styles.breakdownRowLeft}>
+                    <View style={styles.starsRow}>{renderStars(row.level)}</View>
+                  </View>
+                  <Text style={styles.breakdownRecord}>{row.wins}-{row.losses}</Text>
+                  <Text
+                    style={[
+                      styles.breakdownRoi,
+                      { color: showBalance ? getValueColor(row.roi) : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
+                    {showBalance ? formatROI(row.roi) : '••••'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.breakdownPl,
+                      { color: showBalance ? getValueColor(row.profit) : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
+                    {showBalance && row.profit > 0 ? '+' : ''}{formatCurrency(row.profit, currency, showBalance)}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.breakdownEmpty}>
+                Tag your confidence on new bets to see patterns here
+              </Text>
+            )}
+          </View>
+        </FadeInView>
+
+        {/* ── By Reasoning ── */}
+        <FadeInView delay={520} direction="bottom">
+          <View style={styles.breakdownCard}>
+            <View style={styles.breakdownHeader}>
+              <Ionicons name="bulb-outline" size={18} color={colors.accent} />
+              <Text style={styles.breakdownTitle}>By Reasoning</Text>
+            </View>
+            {reasoningBreakdown.length > 0 ? (
+              reasoningBreakdown.map((row) => (
+                <View key={row.tag} style={styles.breakdownRow}>
+                  <View style={styles.breakdownRowLeft}>
+                    <Ionicons name={row.icon as any} size={16} color={colors.textSecondary} />
+                    <Text style={styles.breakdownTagLabel}>{row.label}</Text>
+                  </View>
+                  <Text style={styles.breakdownRecord}>{row.wins}-{row.losses}</Text>
+                  <Text
+                    style={[
+                      styles.breakdownRoi,
+                      { color: showBalance ? getValueColor(row.roi) : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
+                    {showBalance ? formatROI(row.roi) : '••••'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.breakdownPl,
+                      { color: showBalance ? getValueColor(row.profit) : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
+                    {showBalance && row.profit > 0 ? '+' : ''}{formatCurrency(row.profit, currency, showBalance)}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.breakdownEmpty}>
+                Tag your reasoning on new bets to unlock insights
+              </Text>
+            )}
+          </View>
+        </FadeInView>
+
+        {/* AI Coach Link */}
+        <FadeInView delay={540} direction="bottom">
+          <TouchableOpacity
+            style={styles.aiCoachLink}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/ai-coach'); }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="sparkles" size={16} color={colors.accent} />
+            <Text style={styles.aiCoachLinkText}>Get AI Insights</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.accent} />
+          </TouchableOpacity>
+        </FadeInView>
+
         {/* Bet Cards List */}
         <View style={styles.betsList}>
           {hasBets ? (
@@ -336,7 +543,7 @@ export default function StatsScreen() {
                 >
                   <View style={styles.betHeader}>
                     <View style={styles.betHeaderLeft}>
-                      <Text style={styles.platformName}>{bet.sportsbook || 'Unknown'}</Text>
+                      <Text style={styles.platformName} numberOfLines={1}>{bet.sportsbook || 'Unknown'}</Text>
                       <View style={[styles.statusBadge, { backgroundColor: sc.statusBg }]}>
                         <Text style={[styles.statusBadgeText, { color: sc.statusColor }]}>
                           {sc.label}
@@ -345,7 +552,7 @@ export default function StatsScreen() {
                     </View>
                     <Ionicons name={sc.icon as any} size={24} color={sc.statusColor} />
                   </View>
-                  <Text style={styles.betType}>{bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : ''}</Text>
+                  <Text style={styles.betType} numberOfLines={1}>{bet.bet_type ? (bet.bet_type === 'over_under' ? 'Over/Under' : bet.bet_type.charAt(0).toUpperCase() + bet.bet_type.slice(1)) : ''}</Text>
                   <View style={styles.statsRow}>
                     <View style={styles.statColumn}>
                       <Text style={styles.statLabel}>WAGER</Text>
@@ -357,11 +564,16 @@ export default function StatsScreen() {
                     </View>
                     <View style={styles.statColumn}>
                       <Text style={styles.statLabel}>ROI</Text>
-                      <Text style={[styles.roiValue, { color: showBalance ? (roiPctValue < 0 ? '#E85D5D' : colors.accent) : colors.textSecondary }]}>{showBalance ? formatROI(roiPctValue) : '••••'}</Text>
+                      <Text
+                        style={[styles.roiValue, { color: showBalance ? (roiPctValue < 0 ? colors.loss : colors.accent) : colors.textSecondary }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                      >{showBalance ? formatROI(roiPctValue) : '••••'}</Text>
                     </View>
                   </View>
                   <View style={styles.betFooter}>
-                    <Text style={styles.betDate}>{dateStr}</Text>
+                    <Text style={styles.betDate} numberOfLines={1}>{dateStr}</Text>
                     <Text style={styles.betId}>#{String(bet.id).slice(-4)}</Text>
                   </View>
                 </AnimatedPressable>
@@ -428,7 +640,10 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
   },
   summaryRow: {
@@ -444,7 +659,10 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
-    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.03)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
     elevation: 1,
     overflow: 'hidden' as any,
   },
@@ -493,7 +711,10 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
-    boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
     elevation: 2,
   },
   betHeader: {
@@ -605,6 +826,102 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     color: colors.chipActiveText,
     fontSize: 16,
     fontWeight: '600',
+  },
+  breakdownCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  breakdownHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    marginBottom: 14,
+  },
+  breakdownTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: colors.text,
+  },
+  breakdownRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  breakdownRowLeft: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    flex: 1,
+    gap: 6,
+  },
+  starsRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+  },
+  breakdownTagLabel: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: colors.text,
+  },
+  breakdownRecord: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: colors.textSecondary,
+    width: 44,
+    textAlign: 'center' as const,
+  },
+  breakdownRoi: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    width: 56,
+    textAlign: 'right' as const,
+  },
+  breakdownPl: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    width: 72,
+    textAlign: 'right' as const,
+  },
+  breakdownEmpty: {
+    fontSize: 13,
+    color: colors.textTertiary,
+    fontStyle: 'italic' as const,
+    textAlign: 'center' as const,
+    paddingVertical: 16,
+  },
+  aiCoachLink: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    paddingVertical: 14,
+    marginBottom: 20,
+  },
+  aiCoachLinkText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: colors.accent,
+  },
+  whatIfLink: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    paddingVertical: 14,
+    marginBottom: 4,
+  },
+  whatIfLinkText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: colors.accent,
   },
   });
 }

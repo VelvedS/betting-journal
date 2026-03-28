@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { registerPushToken } from '@/lib/notifications';
@@ -34,12 +35,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (_event === 'SIGNED_IN' && session?.user?.id) {
-        registerPushToken(session.user.id);
+        registerPushToken(session.user.id).catch(err =>
+          console.warn('[Push] Registration error:', err)
+        );
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Re-register push token on app resume (handles token rotation)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && session?.user?.id) {
+        registerPushToken(session.user.id).catch(err =>
+          console.warn('[Push] Re-registration error:', err)
+        );
+      }
+    });
+    return () => sub.remove();
+  }, [session?.user?.id]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -61,6 +76,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Clear push token before signing out
+    if (session?.user?.id) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ push_token: null })
+          .eq('id', session.user.id);
+      } catch (err) {
+        console.warn('[Push] Token cleanup error:', err);
+      }
+    }
     await supabase.auth.signOut();
   };
 

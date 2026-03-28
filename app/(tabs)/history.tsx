@@ -64,6 +64,7 @@ import AnimatedNumber from '@/components/AnimatedNumber';
 import { formatROI, getCurrencySymbol } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
 import * as Haptics from 'expo-haptics';
+import { shouldSendNotification } from '@/lib/notifications';
 import SkeletonLoader from '@/components/SkeletonLoader';
 import SkeletonCard from '@/components/SkeletonCard';
 
@@ -792,6 +793,7 @@ function BadgeDetailModal({
   badge,
   onClose,
   colors,
+  isDark,
 }: {
   badge: {
     def: BadgeDef;
@@ -801,6 +803,7 @@ function BadgeDetailModal({
   } | null;
   onClose: () => void;
   colors: ThemeColors;
+  isDark: boolean;
 }) {
   const translateY = useSharedValue(MODAL_HEIGHT);
   const overlayOpacity = useSharedValue(0);
@@ -810,7 +813,7 @@ function BadgeDetailModal({
   useEffect(() => {
     if (visible) {
       translateY.value = withSpring(0, { damping: 15, stiffness: 150 });
-      overlayOpacity.value = withTiming(0.5, { duration: 300 });
+      overlayOpacity.value = withTiming(isDark ? 0.7 : 0.5, { duration: 300 });
       // Shimmer loop for unlocked badges
       if (badge?.isUnlocked) {
         shimmerValue.value = 0;
@@ -1142,6 +1145,9 @@ export default function EdgeScreen() {
         .eq('user_id', user.id),
     ]);
 
+    if (betsRes.error) console.error('[History] bets error:', betsRes.error);
+    if (achRes.error) console.error('[History] achievements error:', achRes.error);
+
     const fetchedBets: Bet[] = betsRes.data || [];
     const fetchedAch: Achievement[] = achRes.data || [];
 
@@ -1172,20 +1178,24 @@ export default function EdgeScreen() {
         // Haptic success buzz for new badge unlock
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
 
-        // Send push notification for each newly unlocked badge
-        inserted.forEach((ach: Achievement) => {
-          const badgeDef = BADGE_DEFINITIONS.find((d) => d.id === ach.badge_id);
-          if (badgeDef) {
-            supabase.functions.invoke('send-notification', {
-              body: {
-                user_id: user.id,
-                title: 'Achievement Unlocked! 🏆',
-                body: `You earned the ${badgeDef.name} badge — ${badgeDef.description}`,
-                data: { type: 'achievements' },
-              },
-            }).catch((err) => console.error('[Push] Failed to send achievement notification:', err));
-          }
-        });
+        // Send push notification for each newly unlocked badge (respects quiet hours)
+        (async () => {
+          const canSend = await shouldSendNotification(user.id);
+          if (!canSend) return;
+          inserted.forEach((ach: Achievement) => {
+            const badgeDef = BADGE_DEFINITIONS.find((d) => d.id === ach.badge_id);
+            if (badgeDef) {
+              supabase.functions.invoke('send-notification', {
+                body: {
+                  user_id: user.id,
+                  title: 'Achievement Unlocked! 🏆',
+                  body: `You earned the ${badgeDef.name} badge — ${badgeDef.description}`,
+                  data: { type: 'achievements' },
+                },
+              }).catch((err) => console.error('[Push] Failed to send achievement notification:', err));
+            }
+          });
+        })();
       }
     }
 
@@ -1620,11 +1630,19 @@ export default function EdgeScreen() {
                     ? colors.textTertiary
                     : '#FFFFFF';
 
+                const roiText = d.count === 0 ? '—' : formatROI(d.roi).replace(/,/g, '');
+                const roiFontSize = roiText.length >= 7 ? 9 : roiText.length >= 5 ? 11 : 13;
+
                 return (
                   <View key={d.day} style={styles.dayColumn}>
                     <View style={[styles.dayBubble, { backgroundColor: bgColor }]}>
-                      <Text style={[styles.dayBubbleText, { color: textColor }]}>
-                        {d.count === 0 ? '—' : formatROI(d.roi)}
+                      <Text
+                        style={[styles.dayBubbleText, { color: textColor, fontSize: roiFontSize }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.6}
+                      >
+                        {roiText}
                       </Text>
                     </View>
                     <Text style={styles.dayLabel}>{d.day.charAt(0)}</Text>
@@ -1949,6 +1967,7 @@ export default function EdgeScreen() {
         badge={selectedBadge}
         onClose={() => setSelectedBadge(null)}
         colors={colors}
+        isDark={isDark}
       />
     </SafeAreaView>
     </TabScreenTransition>
@@ -1994,7 +2013,10 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
-      boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.05)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
       elevation: 2,
     },
 
@@ -2060,7 +2082,10 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 16,
       padding: 20,
       marginBottom: 16,
-      boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.05)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
       elevation: 3,
     },
     highlightHeader: {
@@ -2116,7 +2141,10 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surface,
       borderRadius: 16,
       padding: 20,
-      boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.05)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
       elevation: 3,
     },
     statCardHeader: {
@@ -2153,7 +2181,10 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 16,
       padding: 20,
       marginBottom: 16,
-      boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.05)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
       elevation: 3,
     },
     sectionTitleRow: {
@@ -2258,7 +2289,10 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 14,
       padding: 16,
       width: 130,
-      boxShadow: '0px 1px 6px rgba(0, 0, 0, 0.04)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 6,
       elevation: 2,
       borderWidth: 1,
       borderColor: colors.border,
@@ -2306,15 +2340,17 @@ function createStyles(colors: ThemeColors) {
       gap: 6,
     },
     dayBubble: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingHorizontal: 2,
     },
     dayBubbleText: {
-      fontSize: 10,
+      fontSize: 13,
       fontWeight: '700',
+      textAlign: 'center',
     },
     dayLabel: {
       fontSize: 12,
@@ -2329,7 +2365,10 @@ function createStyles(colors: ThemeColors) {
       padding: 16,
       width: 140,
       alignItems: 'center',
-      boxShadow: '0px 1px 6px rgba(0, 0, 0, 0.04)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 6,
       elevation: 2,
       borderWidth: 1,
       borderColor: colors.border,
@@ -2376,7 +2415,10 @@ function createStyles(colors: ThemeColors) {
       padding: 14,
       marginBottom: 10,
       gap: 14,
-      boxShadow: '0px 1px 6px rgba(0, 0, 0, 0.04)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 6,
       elevation: 2,
     },
     progressInfo: {

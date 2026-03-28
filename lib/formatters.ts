@@ -55,7 +55,9 @@ export function formatOdds(
 // ROI formatting — always shows sign, 0 decimals
 export function formatROI(value: number): string {
   const sign = value >= 0 ? '+' : '';
-  return `${sign}${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}%`;
+  const rounded = Math.round(value);
+  const numStr = Math.abs(rounded) > 999 ? String(rounded) : rounded.toLocaleString('en-US');
+  return `${sign}${numStr}%`;
 }
 
 // Legacy: kept for backward compat

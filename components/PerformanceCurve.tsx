@@ -21,7 +21,7 @@ interface PerformanceCurveProps {
   onCursorChange?: (value: number | null) => void;
 }
 
-const CHART_HEIGHT = 200;
+const CHART_HEIGHT = 150;
 const Y_GUTTER = 20;
 const Y_AXIS_WIDTH = 44;
 const NUM_Y_LABELS = 5;

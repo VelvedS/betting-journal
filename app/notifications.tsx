@@ -48,6 +48,7 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Notifications from 'expo-notifications';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
@@ -123,7 +124,7 @@ export default function NotificationsScreen() {
   const [pickerDate, setPickerDate] = useState<Date>(new Date());
 
   const toastOpacity = useRef(new Animated.Value(0)).current;
-  const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── Toast ──
 
@@ -202,19 +203,24 @@ export default function NotificationsScreen() {
 
   // ── Toggle handlers ──
 
-  const togglePush = (key: NotifKey) => {
+  const togglePush = async (key: NotifKey) => {
     if (Platform.OS !== 'web') try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
     const next = { ...pushPrefs, [key]: !pushPrefs[key] };
     setPushPrefs(next);
     saveNotifPrefs(next, emailPrefs);
-  };
 
-  const toggleEmail = (key: NotifKey) => {
-    if (Platform.OS !== 'web') try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
-    const next = { ...emailPrefs, [key]: !emailPrefs[key] };
-    setEmailPrefs(next);
-    saveNotifPrefs(pushPrefs, next);
-};
+    // Cancel weekly recap schedule when user disables it
+    if (key === 'weeklyReport' && !next.weeklyReport) {
+      try {
+        const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+        for (const notif of scheduled) {
+          if ((notif.content.data as Record<string, unknown>)?.type === 'weeklyRecap') {
+            await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+          }
+        }
+      } catch {}
+    }
+  };
 
   // ── Quiet hours handlers ──
 
@@ -258,7 +264,6 @@ export default function NotificationsScreen() {
   // ── Derived ──
 
   const pushCount = Object.values(pushPrefs).filter(Boolean).length;
-  const emailCount = Object.values(emailPrefs).filter(Boolean).length;
 
   // ── Render ──
 
@@ -302,11 +307,6 @@ export default function NotificationsScreen() {
                 <Text style={styles.statBoxLabel}>Push</Text>
                 <Text style={styles.statBoxValue}>{pushCount}/5</Text>
               </View>
-              <View style={styles.statBox}>
-                <Ionicons name="mail-outline" size={24} color={colors.iconSecondary} />
-                <Text style={styles.statBoxLabel}>Email</Text>
-                <Text style={styles.statBoxValue}>{emailCount}/5</Text>
-              </View>
             </View>
           </View>
         </FadeInView>
@@ -333,25 +333,16 @@ export default function NotificationsScreen() {
           </View>
         </FadeInView>
 
-        {/* Email Notifications Card */}
+        {/* Email Notifications — coming in a future update */}
         <FadeInView delay={240} direction="bottom">
-          <View style={styles.notificationCard}>
+          <View style={[styles.notificationCard, { opacity: 0.5 }]}>
             <View style={styles.notificationHeader}>
-              <Ionicons name="mail-outline" size={20} color={colors.text} style={styles.headerIcon} />
-              <Text style={styles.notificationCardTitle}>Email Notifications</Text>
+              <Ionicons name="mail-outline" size={20} color={colors.textSecondary} style={styles.headerIcon} />
+              <Text style={[styles.notificationCardTitle, { color: colors.textSecondary }]}>Email Notifications</Text>
+              <View style={{ marginLeft: 'auto', backgroundColor: colors.chipBg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary }}>Coming Soon</Text>
+              </View>
             </View>
-            {NOTIF_ROWS.map((row, i) => (
-              <NotificationRow
-                key={row.key}
-                icon={row.icon}
-                title={row.title}
-                description={row.description}
-                isOn={emailPrefs[row.key]}
-                onToggle={() => toggleEmail(row.key)}
-                isLast={i === NOTIF_ROWS.length - 1}
-                colors={colors}
-              />
-            ))}
           </View>
         </FadeInView>
 
@@ -592,7 +583,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       shadowOpacity: 0.18, shadowRadius: 8, elevation: 6,
     },
     toastSuccess: { backgroundColor: colors.accent },
-    toastError: { backgroundColor: '#E85D5D' },
+    toastError: { backgroundColor: colors.loss },
     toastText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', flex: 1 },
 
     // Time Picker Modal (iOS)

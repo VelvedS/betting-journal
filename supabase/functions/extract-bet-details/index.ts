@@ -89,37 +89,45 @@ serve(async (req) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 2048,
-        system: `You are a betting slip data extractor. Analyze the betting slip image and extract all relevant information. Return ONLY valid JSON with no additional text, no markdown backticks, no explanation.
+        system: `You are an expert betting slip extraction system for the Ledgr app. You analyze screenshots of betting slips from sportsbooks and prediction markets, and extract structured data with high accuracy.
 
-Return this exact JSON structure:
+SUPPORTED PLATFORMS: DraftKings, FanDuel, PrizePicks, Underdog Fantasy, BetMGM, Caesars, Bet365, theScore Bet, Fanatics, BetRivers, Hard Rock Bet, Kalshi, Polymarket, Robinhood.
+
+EXTRACTION RULES:
+- Return ONLY valid JSON. No markdown, no code fences, no preamble, no explanation.
+- Extract every field you can identify. Leave fields as null if not visible in the image.
+- For odds: prefer American format (e.g., +150, -110). If decimal or fractional, convert to American.
+- For parlays: set bet_type to 'parlay' and populate the parlay_legs array with each individual leg.
+- Each parlay leg needs: description (player + stat + line), odds (if visible), status ('won', 'lost', 'pending', or null), and result_value (actual stat value if shown).
+- For PrizePicks/Underdog: the 'matchup' is often not a team vs team — use the event or contest name if available. The 'description' should capture all player prop selections.
+- For Kalshi/Polymarket: use the market question as 'matchup' and the position (Yes/No) as part of 'description'.
+- For status: use 'won', 'lost', 'pending', or 'void'. If the slip shows a green checkmark or 'W', it's won. Red X or 'L' is lost. If unclear, default to 'pending'.
+- For placed_at: extract the date/time if visible on the slip. Use ISO 8601 format (YYYY-MM-DDTHH:mm:ss). If only a date is visible, append T00:00:00.
+- For wager and potential_payout: extract as numbers without currency symbols. If the slip shows 'To Win' instead of total payout, calculate potential_payout = wager + to_win.
+- For confidence: assess how clearly readable the slip is from 0.0 to 1.0. Blurry or partially visible = lower confidence.
+- For tags: include relevant descriptive tags like the sport name, league, specific bet market type.
+- If the image is NOT a betting slip (e.g., a random photo, meme, or unrelated screenshot), return: { "error": "not_a_betting_slip" }
+
+JSON STRUCTURE:
 {
-  "sportsbook": "platform name (DraftKings, FanDuel, PrizePicks, Underdog Fantasy, BetMGM, Caesars, Kalshi, Polymarket, Robinhood, etc.)",
-  "bet_type": "moneyline | spread | over_under | parlay | prop | other",
-  "sport": "sport name (NFL, NBA, MLB, NHL, etc.)",
-  "matchup": "teams or event",
-  "description": "full bet description",
-  "odds": "odds as shown (e.g. +150, -110)",
-  "odds_format": "american | decimal | fractional",
-  "wager": 0.00,
-  "potential_payout": 0.00,
-  "status": "pending | won | lost",
-  "placed_at": "ISO timestamp or null",
-  "notes": "any additional context visible",
-  "parlay_legs": [{"description": "leg description", "odds": "leg odds", "status": "pending | won | lost"}],
-  "tags": [],
-  "confidence": 0.0
-}
-
-Rules:
-- For parlay_legs: include array if parlay, otherwise null
-- For tags: suggest from: "underdog_bet", "live_bet", "research_based", "high_confidence", "hedge_bet", "system_play"
-- For confidence: rate 0.0-1.0 your extraction accuracy
-- For wager/potential_payout: extract as numbers. If not visible set to 0
-- For status: look for visual indicators. Default to "pending"
-- If you cannot determine a field, set to null or 0
-- Return ONLY the JSON object`,
+  "sportsbook": string | null,
+  "bet_type": "single" | "parlay" | "teaser" | "round_robin" | "futures" | "prop" | null,
+  "sport": string | null,
+  "matchup": string | null,
+  "description": string | null,
+  "odds": string | null,
+  "odds_format": "american" | "decimal" | "fractional" | null,
+  "wager": number | null,
+  "potential_payout": number | null,
+  "status": "won" | "lost" | "pending" | "void" | null,
+  "placed_at": string | null,
+  "notes": string | null,
+  "parlay_legs": [{ "description": string, "odds": string | null, "status": string | null, "result_value": string | null }] | [],
+  "tags": string[],
+  "confidence": number
+}`,
         messages: [
           {
             role: 'user',
@@ -134,7 +142,9 @@ Rules:
               },
               {
                 type: 'text',
-                text: 'Extract all betting information from this betting slip image. Return ONLY valid JSON.'
+                text: base64Image.length > 1_533_333
+                  ? 'Extract all betting information from this betting slip image. Return ONLY valid JSON.\n\nNote: This image may be high resolution. Focus on extracting text and numbers from the betting slip area. Ignore any background, navigation bars, or non-slip content.'
+                  : 'Extract all betting information from this betting slip image. Return ONLY valid JSON.'
               }
             ]
           }
@@ -167,9 +177,28 @@ Rules:
       const cleanText = textContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       extractedData = JSON.parse(cleanText)
     } catch (parseError) {
-      console.error('JSON parse error:', parseError, 'Raw text:', textContent)
+      // Try to extract JSON from the response if it has extra text around it
+      const jsonMatch = textContent.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        try {
+          extractedData = JSON.parse(jsonMatch[0])
+        } catch {
+          // fall through to error
+        }
+      }
+      if (!extractedData) {
+        console.error('JSON parse error:', parseError, 'Raw text:', textContent)
+        return new Response(
+          JSON.stringify({ success: false, error: 'Could not parse the extracted data. Please try again or enter your bet manually.' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        )
+      }
+    }
+
+    // Handle non-betting-slip images
+    if (extractedData.error === 'not_a_betting_slip') {
       return new Response(
-        JSON.stringify({ success: false, error: 'Could not parse the extracted data. Please try again or enter your bet manually.' }),
+        JSON.stringify({ success: false, error: 'The uploaded image does not appear to be a betting slip. Please try again with a screenshot of your bet.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }

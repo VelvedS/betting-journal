@@ -72,6 +72,37 @@ export async function registerPushToken(userId: string): Promise<void> {
   }
 }
 
+/**
+ * Check quiet hours — returns true if notifications are allowed right now.
+ */
+export async function shouldSendNotification(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('quiet_hours')
+      .eq('id', userId)
+      .single()
+
+    if (!data?.quiet_hours?.enabled) return true
+
+    const now = new Date()
+    const currentTime = now.getHours() * 60 + now.getMinutes()
+
+    const [fromHour, fromMin] = data.quiet_hours.from.split(':').map(Number)
+    const [toHour, toMin] = data.quiet_hours.until.split(':').map(Number)
+    const fromTime = fromHour * 60 + fromMin
+    const toTime = toHour * 60 + toMin
+
+    // Handle overnight ranges (e.g., 22:00 to 07:00)
+    if (fromTime > toTime) {
+      return !(currentTime >= fromTime || currentTime < toTime)
+    }
+    return !(currentTime >= fromTime && currentTime < toTime)
+  } catch {
+    return true // send if we can't check
+  }
+}
+
 export async function sendPushNotification(
   expoPushToken: string,
   title: string,

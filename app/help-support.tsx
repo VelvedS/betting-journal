@@ -564,7 +564,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       shadowOpacity: 0.18, shadowRadius: 8, elevation: 6,
     },
     toastSuccess: { backgroundColor: colors.accent },
-    toastError: { backgroundColor: '#E85D5D' },
+    toastError: { backgroundColor: colors.loss },
     toastText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', flex: 1 },
   });
 }

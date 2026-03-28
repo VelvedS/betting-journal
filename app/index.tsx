@@ -12,17 +12,29 @@ import {
   TextInput,
   View
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import FadeInView from '@/components/FadeInView';
 
 export default function LoginScreen() {
   const { signIn, session, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
+  // Redirect to onboarding if not completed, or to tabs if authenticated
   useEffect(() => {
-    if (!authLoading && session) {
+    if (authLoading) return;
+    if (session) {
       router.replace('/(tabs)');
+      return;
     }
+    AsyncStorage.getItem('@onboarding_complete').then((val) => {
+      if (val !== 'true') {
+        router.replace('/onboarding');
+      } else {
+        setOnboardingChecked(true);
+      }
+    });
   }, [session, authLoading]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,6 +61,11 @@ export default function LoginScreen() {
     // Social login to be implemented later
     console.log(`Login with ${provider}`);
   };
+
+  // Don't render login UI until we've confirmed onboarding is complete
+  if (!onboardingChecked) {
+    return <View style={styles.container} />;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -328,7 +345,10 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
     elevation: 2,
   },
   signInButtonDisabled: {
@@ -373,7 +393,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#E5E5E5',
     gap: 12,
-    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
     elevation: 2,
   },
   appleIcon: {

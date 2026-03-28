@@ -36,6 +36,9 @@ import FadeInView from '@/components/FadeInView';
 import { useTheme } from '@/context/ThemeContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import * as Haptics from 'expo-haptics';
+import { checkForTilt, TiltAlert } from '@/lib/tiltDetection';
+import TiltWarningModal from '@/components/TiltWarningModal';
+import { detectPatterns } from '@/lib/patternDetection';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -72,6 +75,19 @@ const MORE_SPORTS_DATA: SportCategory[] = [
   { category: 'Other', sports: ['Other'] },
 ];
 const ALL_SPORTS = [...POPULAR_SPORTS, ...MORE_SPORTS_DATA.flatMap((c) => c.sports)];
+
+// ── Reasoning tags ──
+
+const REASONING_TAGS: { label: string; value: string; icon: string }[] = [
+  { label: 'Stats', value: 'stats', icon: 'analytics-outline' },
+  { label: 'Value', value: 'value', icon: 'diamond-outline' },
+  { label: 'Gut Feel', value: 'gut_feel', icon: 'flash-outline' },
+  { label: 'Revenge', value: 'revenge', icon: 'flame-outline' },
+  { label: 'Fade', value: 'fade', icon: 'arrow-down-outline' },
+  { label: 'Tail', value: 'tail', icon: 'people-outline' },
+  { label: 'System', value: 'system', icon: 'code-slash-outline' },
+  { label: 'Hedge', value: 'hedge', icon: 'shield-outline' },
+];
 
 // ── Payout calculation ──
 
@@ -116,7 +132,7 @@ function StatusPill({ value, selected, onPress }: { value: BetStatus; selected: 
     switch (value) {
       case 'pending': return { bg: 'transparent', text: colors.accent, border: colors.accent, bw: 1 };
       case 'won': return { bg: colors.accent, text: '#FFFFFF', border: colors.accent, bw: 0 };
-      case 'lost': return { bg: '#E85D5D', text: '#FFFFFF', border: '#E85D5D', bw: 0 };
+      case 'lost': return { bg: colors.loss, text: '#FFFFFF', border: colors.loss, bw: 0 };
       case 'void': return { bg: '#999999', text: '#FFFFFF', border: '#999999', bw: 0 };
     }
   };
@@ -149,6 +165,7 @@ export default function ManualAddBetScreen() {
     potential_payout?: string; status?: string; placed_at?: string; notes?: string;
     ticket_image_url?: string; parlay_legs?: string; tags?: string; confidence?: string;
     id?: string; isEditing?: string; platform?: string; date?: string;
+    confidence_level?: string; reasoning_tag?: string;
   }>();
 
   const isEditing = params.isEditing === 'true';
@@ -157,6 +174,9 @@ export default function ManualAddBetScreen() {
   const hasRouteParams = Object.keys(params).length > 0;
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [tiltAlert, setTiltAlert] = useState<TiltAlert | null>(null);
+  const [showTiltModal, setShowTiltModal] = useState(false);
+  const pendingSaveRef = useRef(false);
   const [activeTab, setActiveTab] = useState(0);
 
   const TAB_LABELS = ['Sportsbook Info', 'The Wager', 'Bet Details'];
@@ -184,6 +204,31 @@ export default function ManualAddBetScreen() {
     if (!params.tags) return [];
     try { return JSON.parse(params.tags); } catch { return []; }
   });
+  // Gut check
+  const [confidenceLevel, setConfidenceLevel] = useState<number | null>(() => {
+    if (params.confidence_level) { const n = parseInt(params.confidence_level); return n >= 1 && n <= 5 ? n : null; }
+    return null;
+  });
+  const [reasoningTag, setReasoningTag] = useState<string | null>(params.reasoning_tag || null);
+
+  // Star bounce animation
+  const starScale = useSharedValue(1);
+  const starBounceStyle = useAnimatedStyle(() => ({ transform: [{ scale: starScale.value }] }));
+
+  const handleStarPress = useCallback((star: number) => {
+    Haptics.selectionAsync();
+    setConfidenceLevel((prev) => prev === star ? null : star);
+    starScale.value = withSequence(
+      withTiming(1.2, { duration: 100 }),
+      withTiming(1, { duration: 200 }),
+    );
+  }, []);
+
+  const handleReasoningPress = useCallback((tag: string) => {
+    Haptics.selectionAsync();
+    setReasoningTag((prev) => prev === tag ? null : tag);
+  }, []);
+
   const [wager, setWager] = useState(params.wager || '');
   const [odds, setOdds] = useState('');
   const [matchup, setMatchup] = useState(params.matchup || '');
@@ -327,7 +372,6 @@ export default function ManualAddBetScreen() {
 
   // Ticket image
   const [ticketImageUrl, setTicketImageUrl] = useState(params.ticket_image_url || '');
-  const [confidence, setConfidence] = useState(() => params.confidence ? parseFloat(params.confidence) : null);
   const [showAiBanner, setShowAiBanner] = useState(hasRouteParams && !isEditing);
 
   // Platform state
@@ -400,7 +444,7 @@ export default function ManualAddBetScreen() {
     setParlayLegs(parlayLegs.filter((_, i) => i !== index));
   };
 
-  const handleSaveBet = async () => {
+  const executeSave = async () => {
     const finalStatus = status || 'pending';
     const sportsbook = isPlatformOther ? customPlatform : selectedPlatform;
     const allSports = [...selectedSports, ...(isSportOther && customSport.trim() ? [customSport.trim()] : [])];
@@ -438,6 +482,8 @@ export default function ManualAddBetScreen() {
       status: finalStatus,
       notes: notes || null,
       ticket_image_url: ticketImageUrl || null,
+      confidence_level: confidenceLevel || null,
+      reasoning_tag: reasoningTag || null,
       placed_at: placedAt ? placedAt.toISOString() : new Date().toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -472,7 +518,7 @@ export default function ManualAddBetScreen() {
 
         setIsSaving(false);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        router.replace(`/bet-details/${editBetId}`);
+        router.back();
       } else {
         // Insert new bet
         const { data, error } = await supabase.from('bets').insert(payload).select().single();
@@ -498,9 +544,16 @@ export default function ManualAddBetScreen() {
           }
         }
 
+        // Fire-and-forget pattern detection for already-settled bets
+        if ((finalStatus === 'won' || finalStatus === 'lost') && data?.id) {
+          detectPatterns(user.id, data.id).catch((err) =>
+            console.warn('[PatternDetection] Error:', err),
+          );
+        }
+
         setIsSaving(false);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        router.back();
+        router.replace(`/bet-details/${data.id}`);
       }
     } catch (err: any) {
       console.error('Failed to save bet:', err);
@@ -508,6 +561,39 @@ export default function ManualAddBetScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', isEditing ? 'Failed to update bet. Please try again.' : 'Failed to save bet. Please try again.');
     }
+  };
+
+  const handleSaveBet = async () => {
+    if (isSaving) return;
+
+    if (!user) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'You must be logged in to save a bet.');
+      return;
+    }
+
+    // Skip tilt check for edits
+    if (isEditing) {
+      executeSave();
+      return;
+    }
+
+    // Check for tilt patterns before saving new bets
+    try {
+      const wagerNum = parseFloat(wager) || 0;
+      const result = await checkForTilt(user.id, wagerNum);
+      if (result) {
+        setTiltAlert(result);
+        setShowTiltModal(true);
+        pendingSaveRef.current = true;
+        return;
+      }
+    } catch (err) {
+      // Don't block save if tilt check fails
+      console.warn('Tilt check failed:', err);
+    }
+
+    executeSave();
   };
 
   // Sport sheet content
@@ -572,13 +658,12 @@ export default function ManualAddBetScreen() {
         {/* ── AI Banner ── */}
         {hasRouteParams && showAiBanner && (
           <View style={styles.banner}>
-            <Ionicons name="sparkles" size={18} color="#6C63FF" />
+            <Ionicons name="sparkles" size={18} color={colors.ai} />
             <View style={styles.bannerBody}>
               <Text style={styles.bannerText}>AI-extracted — please review before saving</Text>
-              {confidence !== null && <Text style={styles.confidenceText}>Confidence: {Math.round((confidence as number) * 100)}%</Text>}
             </View>
             <TouchableOpacity onPress={() => setShowAiBanner(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={16} color="#6C63FF" />
+              <Ionicons name="close" size={16} color={colors.ai} />
             </TouchableOpacity>
           </View>
         )}
@@ -778,6 +863,54 @@ export default function ManualAddBetScreen() {
                 <StatusPill key={s} value={s} selected={status === s} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStatus(s); }} />
               ))}
             </View>
+
+            {/* ── Gut Check: Confidence ── */}
+            <View style={styles.gutCheckSection}>
+              <Text style={styles.gutCheckLabel}>How confident are you?</Text>
+              <RAnimated.View style={[styles.starsRow, starBounceStyle]}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <AnimatedPressable
+                    key={star}
+                    onPress={() => handleStarPress(star)}
+                    scaleDown={0.85}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                  >
+                    <Ionicons
+                      name={confidenceLevel !== null && star <= confidenceLevel ? 'star' : 'star-outline'}
+                      size={28}
+                      color={confidenceLevel !== null && star <= confidenceLevel ? colors.accent : colors.textTertiary}
+                    />
+                  </AnimatedPressable>
+                ))}
+              </RAnimated.View>
+            </View>
+
+            {/* ── Gut Check: Reasoning ── */}
+            <View style={styles.gutCheckSection}>
+              <Text style={styles.gutCheckLabel}>What's driving this bet?</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reasoningScroll}>
+                {REASONING_TAGS.map((tag) => {
+                  const selected = reasoningTag === tag.value;
+                  return (
+                    <AnimatedPressable
+                      key={tag.value}
+                      style={[styles.reasoningChip, selected && styles.reasoningChipSelected]}
+                      onPress={() => handleReasoningPress(tag.value)}
+                      scaleDown={0.93}
+                    >
+                      <Ionicons
+                        name={tag.icon as any}
+                        size={15}
+                        color={selected ? '#FFFFFF' : colors.textSecondary}
+                      />
+                      <Text style={[styles.reasoningChipText, selected && styles.reasoningChipTextSelected]}>
+                        {tag.label}
+                      </Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
           </View>
         </FadeInView>
         )}
@@ -916,13 +1049,13 @@ export default function ManualAddBetScreen() {
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                      <Ionicons name="close" size={18} color="#E85D5D" />
+                      <Ionicons name="close" size={18} color={colors.loss} />
                     </TouchableOpacity>
                   </View>
                 ))}
 
                 <TouchableOpacity style={styles.addLegBtn} onPress={addParlayLeg} activeOpacity={0.7}>
-                  <Ionicons name="add-circle-outline" size={18} color="#6366F1" />
+                  <Ionicons name="add-circle-outline" size={18} color={colors.ai} />
                   <Text style={styles.addLegText}>Add Leg</Text>
                 </TouchableOpacity>
               </>
@@ -1057,6 +1190,26 @@ export default function ManualAddBetScreen() {
           </Animated.View>
         </View>
       </Modal>
+      {/* Tilt Warning Modal */}
+      {tiltAlert && (
+        <TiltWarningModal
+          visible={showTiltModal}
+          alert={tiltAlert}
+          userId={user?.id || ''}
+          onProceed={() => {
+            setShowTiltModal(false);
+            setTiltAlert(null);
+            pendingSaveRef.current = false;
+            executeSave();
+          }}
+          onTakeBreak={() => {
+            setShowTiltModal(false);
+            setTiltAlert(null);
+            pendingSaveRef.current = false;
+            router.back();
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -1079,8 +1232,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     // AI Banner
     banner: { backgroundColor: '#F0EEFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, marginHorizontal: 20, marginBottom: 16, gap: 10 },
     bannerBody: { flex: 1 },
-    bannerText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
-    confidenceText: { fontSize: 12, fontWeight: '400', color: '#9B8FE0', marginTop: 2 },
+    bannerText: { fontSize: 14, fontWeight: '500', color: colors.ai },
 
     // Cards
     card: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, marginHorizontal: 20, marginBottom: 16 },
@@ -1121,6 +1273,16 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     // Status
     statusRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
 
+    // Gut check
+    gutCheckSection: { marginTop: 20 },
+    gutCheckLabel: { fontSize: 14, fontWeight: '500', color: colors.textSecondary, marginBottom: 10 },
+    starsRow: { flexDirection: 'row', gap: 8 },
+    reasoningScroll: { gap: 8, paddingRight: 4 },
+    reasoningChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: 'transparent' },
+    reasoningChipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+    reasoningChipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+    reasoningChipTextSelected: { color: '#FFFFFF' },
+
     // Tab bar
     tabBar: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, backgroundColor: colors.chipBg, borderRadius: 12, padding: 3 },
     tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
@@ -1140,7 +1302,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
 
     // Parlay
     parlayHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-    parlayBadge: { backgroundColor: '#6C63FF', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+    parlayBadge: { backgroundColor: colors.ai, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
     parlayBadgeText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
     legCard: { backgroundColor: colors.background, borderRadius: 12, padding: 12, marginBottom: 10, flexDirection: 'row', gap: 10 },
     legInput: { height: 44, marginBottom: 8 },
@@ -1148,19 +1310,19 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     legStatusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: 'transparent' },
     legStatusPending: { borderColor: colors.accent },
     legStatusWon: { backgroundColor: colors.accent, borderColor: colors.accent },
-    legStatusLost: { backgroundColor: '#E85D5D', borderColor: '#E85D5D' },
+    legStatusLost: { backgroundColor: colors.loss, borderColor: colors.loss },
     legStatusText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
     legStatusTextActive: { color: '#FFFFFF' },
     legDeleteBtn: { padding: 4, marginTop: 2 },
-    addLegBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#6366F1', borderStyle: 'dashed' },
-    addLegText: { fontSize: 14, fontWeight: '600', color: '#6366F1' },
+    addLegBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.ai, borderStyle: 'dashed' },
+    addLegText: { fontSize: 14, fontWeight: '600', color: colors.ai },
 
     // Image
     imageWrap: { position: 'relative', marginBottom: 4 },
     imagePreview: { width: '100%', height: 120, borderRadius: 12, backgroundColor: colors.dividerLine },
     imageRemoveBtn: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
     retakeBtn: { alignItems: 'center', paddingVertical: 10 },
-    retakeText: { fontSize: 14, fontWeight: '500', color: '#6C63FF' },
+    retakeText: { fontSize: 14, fontWeight: '500', color: colors.ai },
     uploadArea: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', paddingVertical: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.input },
     uploadTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginTop: 8 },
     uploadHint: { fontSize: 12, color: colors.textTertiary, marginTop: 4 },

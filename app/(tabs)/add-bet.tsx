@@ -381,7 +381,7 @@ export default function AddBetScreen() {
                 <View style={styles.spinningCircleInner} />
               </Animated.View>
               <View style={styles.aiIconContainer}>
-                <Ionicons name="sparkles" size={34} color="#6C63FF" />
+                <Ionicons name="sparkles" size={34} color={colors.ai} />
               </View>
 
               <Text style={styles.processingTitle}>Processing Ticket...</Text>
@@ -478,7 +478,7 @@ export default function AddBetScreen() {
             <Animated.View style={[styles.errorCard, errorShakeStyle]}>
               {/* Error Icon */}
               <View style={styles.errorIconContainer}>
-                <Ionicons name="alert-circle" size={40} color="#E85D5D" />
+                <Ionicons name="alert-circle" size={40} color={colors.loss} />
               </View>
 
               <Text style={styles.errorTitle}>Couldn't Extract Bet Details</Text>
@@ -576,7 +576,7 @@ export default function AddBetScreen() {
         {/* Card 4 - AI-Powered Recognition (Info Card) */}
         <FadeInView delay={280} direction="bottom">
           <View style={styles.infoCard}>
-            <Ionicons name="sparkles" size={20} color="#6366F1" style={styles.infoIcon} />
+            <Ionicons name="sparkles" size={20} color={colors.ai} style={styles.infoIcon} />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoCardTitle}>AI-Powered Recognition</Text>
               <Text style={styles.infoCardDescription}>
@@ -653,7 +653,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       height: 108,
       borderRadius: 54,
       borderWidth: 3,
-      borderColor: '#6C63FF',
+      borderColor: colors.ai,
       borderStyle: 'solid',
       borderTopColor: 'transparent',
       borderRightColor: 'transparent',
@@ -700,7 +700,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       width: 8,
       height: 8,
       borderRadius: 4,
-      backgroundColor: '#6C63FF',
+      backgroundColor: colors.ai,
       marginRight: 12,
     },
     stepText: {

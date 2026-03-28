@@ -39,6 +39,11 @@ export type ThemeColors = {
   // Accent (unified green)
   accent: string;
   accentBg: string;
+  // Semantic status colors
+  loss: string;
+  pending: string;
+  ai: string;
+  star: string;
   // Nav glass
   navGlass: string;
   navGlassBorder: string;
@@ -75,6 +80,10 @@ export const lightColors: ThemeColors = {
   statusBar: 'dark',
   accent: '#2DC672',
   accentBg: 'rgba(45, 198, 114, 0.12)',
+  loss: '#E85D5D',
+  pending: '#F5A623',
+  ai: '#6366F1',
+  star: '#F5A623',
   navGlass: 'rgba(255, 255, 255, 0.30)',
   navGlassBorder: 'rgba(255, 255, 255, 0.15)',
   navGlassHighlight: 'rgba(255, 255, 255, 0.5)',
@@ -110,6 +119,10 @@ export const darkColors: ThemeColors = {
   statusBar: 'light',
   accent: '#2DC672',
   accentBg: 'rgba(45, 198, 114, 0.15)',
+  loss: '#E85D5D',
+  pending: '#F5A623',
+  ai: '#6366F1',
+  star: '#F5A623',
   navGlass: 'rgba(30, 30, 30, 0.25)',
   navGlassBorder: 'rgba(255, 255, 255, 0.08)',
   navGlassHighlight: 'rgba(255, 255, 255, 0.2)',

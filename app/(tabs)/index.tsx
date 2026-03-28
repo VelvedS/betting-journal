@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
+  ScrollView,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -12,6 +14,7 @@ import Animated, {
   interpolate,
   withRepeat,
   withTiming,
+  runOnJS,
   Easing,
   Extrapolation,
 } from 'react-native-reanimated';
@@ -22,17 +25,19 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatCurrency, formatROI, getCurrencySymbol } from '@/lib/formatters';
 import { usePreferences } from '@/context/PreferencesContext';
-import AnimatedPressable from '@/components/AnimatedPressable';
+// AnimatedPressable removed — using TouchableOpacity for touch debugging
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import FadeInView from '@/components/FadeInView';
 import AnimatedNumber from '@/components/AnimatedNumber';
 import PerformanceCurve, { TimePeriod } from '@/components/PerformanceCurve';
+import LiveScoresTicker from '@/components/LiveScoresTicker';
+import TickerDetailSheet from '@/components/TickerDetailSheet';
 import SkeletonLoader from '@/components/SkeletonLoader';
 import SkeletonBetCard from '@/components/SkeletonBetCard';
-import TabScreenTransition from '@/components/TabScreenTransition';
+import { getAvailableReports } from '@/lib/seasonDefinitions';
 
 const getStatusConfig = (status: string) => {
   switch (status) {
@@ -97,17 +102,37 @@ export default function HomeScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [hasUnreadInsights, setHasUnreadInsights] = useState(false);
+
+  // Pattern alert banner state
+  const [bannerVisible, setBannerVisible] = useState(false);
+  const [bannerMessage, setBannerMessage] = useState('');
+  const bannerOpacity = useSharedValue(0);
+  const bannerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Season report banner state
+  const [seasonBanner, setSeasonBanner] = useState<{
+    sport: string; label: string; startDate: string; endDate: string;
+  } | null>(null);
+
+  // Ticker detail sheet state
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [sheetItemType, setSheetItemType] = useState<'espn' | 'kalshi' | null>(null);
+  const [sheetItemId, setSheetItemId] = useState<string | null>(null);
+  const [sheetItemSport, setSheetItemSport] = useState<string>('');
 
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
 
-    const { data: recent } = await supabase
+    const { data: recent, error: recentError } = await supabase
       .from('bets')
       .select('*')
       .eq('user_id', user.id)
       .order('placed_at', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(5);
+    if (recentError) console.error('[Dashboard] recentBets fetch error:', recentError);
     setRecentBets(recent || []);
 
     const { data: all, error: allError } = await supabase
@@ -118,13 +143,76 @@ export default function HomeScreen() {
       .order('created_at', { ascending: false });
     if (allError) console.error('[Dashboard] allBets fetch error:', allError);
     setAllBets(all || []);
+
+    // Check for unread AI insights
+    const { count } = await supabase
+      .from('ai_insights')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false);
+    setHasUnreadInsights((count ?? 0) > 0);
+
     setLoading(false);
   }, [user]);
 
   useFocusEffect(
     useCallback(() => {
       fetchDashboardData();
-    }, [fetchDashboardData])
+      setTickerKey((k) => k + 1);
+
+      // Check for recent pattern alerts
+      (async () => {
+        try {
+          const raw = await AsyncStorage.getItem('recent_alerts');
+          if (!raw) return;
+          const alerts = JSON.parse(raw);
+          const now = Date.now();
+          const recentAlert = alerts.find((a: any) => {
+            if (!a.timestamp) return false;
+            return now - new Date(a.timestamp).getTime() < 60000;
+          });
+          if (!recentAlert) return;
+
+          const lastShown = await AsyncStorage.getItem('last_shown_alert_timestamp');
+          if (lastShown === recentAlert.timestamp) return;
+
+          await AsyncStorage.setItem('last_shown_alert_timestamp', recentAlert.timestamp);
+          setBannerMessage(recentAlert.message);
+          setBannerVisible(true);
+          bannerOpacity.value = withTiming(1, { duration: 300 });
+
+          bannerTimeoutRef.current = setTimeout(() => {
+            bannerOpacity.value = withTiming(0, { duration: 300 }, (finished) => {
+              if (finished) runOnJS(dismissBanner)();
+            });
+          }, 5000);
+        } catch {}
+      })();
+
+      // Check for season report banners
+      if (user) {
+        (async () => {
+          try {
+            const reports = await getAvailableReports(user.id);
+            for (const report of reports) {
+              const key = `season_report_viewed_${report.sport}_${report.label}`;
+              const viewed = await AsyncStorage.getItem(key);
+              if (!viewed) {
+                setSeasonBanner(report);
+                return;
+              }
+            }
+            setSeasonBanner(null);
+          } catch {
+            setSeasonBanner(null);
+          }
+        })();
+      }
+
+      return () => {
+        if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+      };
+    }, [fetchDashboardData, user])
   );
 
   const onRefresh = useCallback(async () => {
@@ -179,18 +267,21 @@ export default function HomeScreen() {
 
   // Live number ticker — reset on focus so it counts up each time
   const [tickerKey, setTickerKey] = useState(0);
-  useFocusEffect(
-    useCallback(() => {
-      setTickerKey((k) => k + 1);
-    }, [])
-  );
+
+  // ── Pattern Alert Banner ──
+  const dismissBanner = useCallback(() => {
+    setBannerVisible(false);
+  }, []);
+
+  const bannerAnimStyle = useAnimatedStyle(() => ({
+    opacity: bannerOpacity.value,
+  }));
 
   return (
-    <TabScreenTransition>
     <SafeAreaView style={styles.container}>
       <StatusBar style={colors.statusBar} />
 
-      <Animated.ScrollView
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -201,62 +292,104 @@ export default function HomeScreen() {
             colors={[colors.chipActiveBg]}
           />
         }
-        scrollEventThrottle={16}
       >
         {/* Header Section */}
-        <FadeInView delay={0} direction="bottom">
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Welcome Back, {displayName}</Text>
             <Text style={styles.headerQuote}>"Don't just play the books, keep your own."</Text>
           </View>
-        </FadeInView>
+
+        {/* Pattern Alert Banner */}
+        {bannerVisible && (
+          <Animated.View style={bannerAnimStyle}>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10,
+                backgroundColor: colors.surface, borderRadius: 12, padding: 14,
+                marginBottom: 20, borderLeftWidth: 3, borderLeftColor: colors.accent,
+              }}
+              onPress={() => {
+                if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+                bannerOpacity.value = withTiming(0, { duration: 300 }, (finished) => {
+                  if (finished) runOnJS(dismissBanner)();
+                });
+                router.push('/insights');
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="sparkles" size={18} color={colors.accent} />
+              <Text style={{ flex: 1, fontSize: 13, color: colors.text, lineHeight: 18 }} numberOfLines={2}>{bannerMessage}</Text>
+              <Text style={{ fontSize: 13, fontWeight: '600' as const, color: colors.accent }}>View →</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
+        {/* Season Report Banner */}
+        {seasonBanner && (
+          <TouchableOpacity
+            style={styles.seasonBanner}
+            onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              const key = `season_report_viewed_${seasonBanner.sport}_${seasonBanner.label}`;
+              await AsyncStorage.setItem(key, 'true');
+              router.push({
+                pathname: '/season-report',
+                params: {
+                  sport: seasonBanner.sport,
+                  seasonLabel: seasonBanner.label,
+                  startDate: seasonBanner.startDate,
+                  endDate: seasonBanner.endDate,
+                },
+              });
+              setSeasonBanner(null);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trophy" size={18} color={colors.accent} />
+            <Text style={styles.seasonBannerText}>
+              Your {seasonBanner.sport} Season Report is ready
+            </Text>
+            <Text style={{ fontSize: 13, fontWeight: '600' as const, color: colors.accent }}>{'\u2192'}</Text>
+          </TouchableOpacity>
+        )}
 
         {loading ? (
           <>
             {/* Skeleton profit card */}
-            <FadeInView delay={80} direction="bottom">
               <View style={styles.profitCard}>
                 <SkeletonLoader width={140} height={12} borderRadius={6} />
                 <View style={{ marginTop: 12 }}>
                   <SkeletonLoader width={180} height={36} borderRadius={8} />
                 </View>
               </View>
-            </FadeInView>
             {/* Skeleton bet cards */}
             {[0, 1, 2].map((i) => (
-              <FadeInView key={i} delay={160 + i * 80} direction="bottom">
-                <SkeletonBetCard />
-              </FadeInView>
+                <SkeletonBetCard key={i} />
             ))}
           </>
         ) : !hasBets ? (
           <>
             {/* Welcome Card */}
-            <FadeInView delay={80} direction="bottom">
               <View style={styles.profitCard}>
                 <Text style={styles.welcomeTitle}>Welcome to Ledgr! 👋</Text>
                 <Text style={styles.welcomeSubtitle}>
                   Upload your first betting slip to start tracking your performance.
                 </Text>
               </View>
-            </FadeInView>
 
             {/* Chart Placeholder */}
-            <FadeInView delay={160} direction="bottom">
               <View style={styles.chartPlaceholder}>
                 <Text style={{ fontSize: 32 }}>📈</Text>
                 <Text style={styles.chartPlaceholderText}>
                   Your performance curve will appear here
                 </Text>
               </View>
-            </FadeInView>
 
             {/* Upload CTA */}
-            <FadeInView delay={240} direction="bottom">
-              <AnimatedPressable
+              <TouchableOpacity
                 style={styles.uploadCtaCard}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/add-bet'); }}
-                scaleDown={0.97}
+                activeOpacity={0.7}
               >
                 <View style={styles.uploadCtaIconCircle}>
                   <Ionicons name="add" size={36} color={colors.buttonPrimaryText} />
@@ -265,17 +398,15 @@ export default function HomeScreen() {
                 <Text style={styles.uploadCtaSubtitle}>
                   Snap a photo of your betting slip or add one manually
                 </Text>
-              </AnimatedPressable>
-            </FadeInView>
+              </TouchableOpacity>
           </>
         ) : (
           <>
             {/* Total Profit/Loss Card */}
-            <FadeInView delay={80} direction="bottom">
               <View style={styles.profitCard}>
                 {(isProfit || isLoss) && (
                   <>
-                    <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }, gradientAStyle]}>
+                    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }, gradientAStyle]}>
                       <LinearGradient
                         colors={isDark
                           ? (isProfit ? [colors.surface, '#0D2B1A'] : [colors.surface, '#2B0D0D'])
@@ -286,7 +417,7 @@ export default function HomeScreen() {
                         style={StyleSheet.absoluteFill}
                       />
                     </Animated.View>
-                    <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }, gradientBStyle]}>
+                    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }, gradientBStyle]}>
                       <LinearGradient
                         colors={isDark
                           ? (isProfit ? [colors.surface, '#0D2B1C'] : [colors.surface, '#2B1010'])
@@ -298,7 +429,7 @@ export default function HomeScreen() {
                       />
                     </Animated.View>
                     {!isDark && (
-                      <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden', opacity: 0.5 }, gradientAStyle]}>
+                      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden', opacity: 0.5 }, gradientAStyle]}>
                         <LinearGradient
                           colors={isProfit ? ['transparent', 'rgba(45, 198, 114, 0.12)'] : ['transparent', 'rgba(232, 93, 93, 0.10)']}
                           start={{ x: 0.5, y: 0.3 }}
@@ -317,7 +448,7 @@ export default function HomeScreen() {
                     <Text
                       style={[
                         styles.profitValue,
-                        { color: displayProfit >= 0 ? colors.accent : '#E85D5D' },
+                        { color: displayProfit >= 0 ? colors.accent : colors.loss },
                       ]}
                     >
                       {formatCurrency(displayProfit, currency, showBalance)}
@@ -330,10 +461,10 @@ export default function HomeScreen() {
                       decimals={0}
                       delay={0}
                       duration={1200}
-                      style={{ ...styles.profitValue, color: displayProfit >= 0 ? colors.accent : '#E85D5D' }}
+                      style={{ ...styles.profitValue, color: displayProfit >= 0 ? colors.accent : colors.loss }}
                     />
                   ) : (
-                    <Text style={{ ...styles.profitValue, color: displayProfit >= 0 ? colors.accent : '#E85D5D' }}>
+                    <Text style={{ ...styles.profitValue, color: displayProfit >= 0 ? colors.accent : colors.loss }}>
                       ••••
                     </Text>
                   )}
@@ -341,13 +472,13 @@ export default function HomeScreen() {
                     <Ionicons
                       name={displayProfit >= 0 ? 'trending-up' : 'trending-down'}
                       size={20}
-                      color={displayProfit >= 0 ? colors.accent : '#E85D5D'}
+                      color={displayProfit >= 0 ? colors.accent : colors.loss}
                     />
                     {cursorPL !== null ? (
                       <Text
                         style={[
                           styles.percentageText,
-                          { color: displayProfit >= 0 ? colors.accent : '#E85D5D' },
+                          { color: displayProfit >= 0 ? colors.accent : colors.loss },
                         ]}
                       >
                         {showBalance ? formatROI(roiPct) : '••••'}
@@ -361,77 +492,127 @@ export default function HomeScreen() {
                         decimals={0}
                         delay={0}
                         duration={1200}
-                        style={{ ...styles.percentageText, color: displayProfit >= 0 ? colors.accent : '#E85D5D' }}
+                        style={{ ...styles.percentageText, color: displayProfit >= 0 ? colors.accent : colors.loss }}
                       />
                     ) : (
-                      <Text style={{ ...styles.percentageText, color: displayProfit >= 0 ? colors.accent : '#E85D5D' }}>
+                      <Text style={{ ...styles.percentageText, color: displayProfit >= 0 ? colors.accent : colors.loss }}>
                         ••••
                       </Text>
                     )}
                   </View>
                 </View>
               </View>
-            </FadeInView>
 
-            {/* Time Period Tabs */}
-            <FadeInView delay={160} direction="bottom">
-              <View style={styles.tabsContainer}>
-                {(['Daily', 'Weekly', 'Monthly', 'Lifetime'] as TimePeriod[]).map(
-                  (period) => (
-                    <AnimatedPressable
-                      key={period}
-                      style={[
-                        styles.tab,
-                        selectedPeriod === period && styles.tabActive,
-                      ]}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setSelectedPeriod(period);
-                        setCursorPL(null);
-                      }}
-                      scaleDown={0.93}
-                    >
-                      <Text
-                        style={[
-                          styles.tabText,
-                          selectedPeriod === period && styles.tabTextActive,
-                        ]}
-                      >
-                        {period}
-                      </Text>
-                    </AnimatedPressable>
-                  )
-                )}
-              </View>
-            </FadeInView>
+            {/* Live Sports Ticker */}
+              <LiveScoresTicker
+                onGamePress={(id, sport) => {
+                  setSheetItemType('espn');
+                  setSheetItemId(id);
+                  setSheetItemSport(sport);
+                  setSheetVisible(true);
+                }}
+              />
 
             {/* Performance Curve Card */}
-            <FadeInView delay={220} direction="bottom">
               <View style={styles.chartCard}>
-                <Text style={styles.chartLabel}>PERFORMANCE CURVE</Text>
+                <View style={styles.chartHeaderRow}>
+                  <Text style={styles.chartLabel}>PERFORMANCE CURVE</Text>
+                  <TouchableOpacity
+                    style={styles.filterPill}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setFilterOpen((v) => !v);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="options-outline" size={14} color={colors.textSecondary} />
+                    <Text style={styles.filterPillText}>{selectedPeriod}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Filter dropdown */}
+                {filterOpen && (
+                  <>
+                    <TouchableOpacity
+                      activeOpacity={1}
+                      style={StyleSheet.absoluteFill}
+                      onPress={() => setFilterOpen(false)}
+                    />
+                    <Animated.View
+                      style={[
+                        styles.filterDropdown,
+                        {
+                          shadowOpacity: isDark ? 0.3 : 0.1,
+                        },
+                      ]}
+                    >
+                      {(['Daily', 'Weekly', 'Monthly', 'Lifetime'] as TimePeriod[]).map(
+                        (period) => {
+                          const isActive = selectedPeriod === period;
+                          return (
+                            <TouchableOpacity
+                              key={period}
+                              style={[
+                                styles.filterDropdownItem,
+                                isActive && styles.filterDropdownItemActive,
+                              ]}
+                              onPress={() => {
+                                Haptics.selectionAsync();
+                                setSelectedPeriod(period);
+                                setCursorPL(null);
+                                setFilterOpen(false);
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text
+                                style={[
+                                  styles.filterDropdownText,
+                                  isActive && styles.filterDropdownTextActive,
+                                ]}
+                              >
+                                {period}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        }
+                      )}
+                    </Animated.View>
+                  </>
+                )}
+
                 <PerformanceCurve
                   allBets={allBets}
                   period={selectedPeriod}
                   onCursorChange={setCursorPL}
                 />
               </View>
-            </FadeInView>
+
+            {/* Unread AI Insights Banner */}
+            {hasUnreadInsights && (
+              <TouchableOpacity
+                style={styles.insightBanner}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/ai-coach'); }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="sparkles" size={18} color={colors.accent} />
+                <Text style={styles.insightBannerText}>New AI insights available</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+              </TouchableOpacity>
+            )}
 
             {/* Recent Activity Section */}
             <View style={styles.activitySection}>
-              <FadeInView delay={300} direction="none">
                 <View style={styles.activityTitleRow}>
                   <Text style={styles.activityTitle}>Recent Activity</Text>
-                  <AnimatedPressable
+                  <TouchableOpacity
                     style={styles.viewAllButton}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/stats'); }}
-                    scaleDown={0.93}
+                    activeOpacity={0.7}
                   >
                     <Text style={styles.viewAllText}>View All</Text>
                     <Ionicons name="arrow-forward" size={16} color={colors.accent} />
-                  </AnimatedPressable>
+                  </TouchableOpacity>
                 </View>
-              </FadeInView>
 
               {recentBets.map((bet, index) => {
                 const sc = getStatusConfig(bet.status);
@@ -449,15 +630,15 @@ export default function HomeScreen() {
                     })
                   : '';
                 return (
-                  <FadeInView key={bet.id} delay={360 + index * 80} direction="bottom">
-                    <AnimatedPressable
+                    <TouchableOpacity
+                      key={bet.id}
                       style={styles.activityCard}
                       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/bet-details/${bet.id}`); }}
-                      scaleDown={0.98}
+                      activeOpacity={0.7}
                     >
                       <View style={styles.activityHeader}>
                         <View style={styles.activityHeaderLeft}>
-                          <Text style={styles.platformName}>
+                          <Text style={styles.platformName} numberOfLines={1}>
                             {bet.sportsbook || 'Unknown'}
                           </Text>
                           <View
@@ -476,7 +657,7 @@ export default function HomeScreen() {
                           color={sc.statusColor}
                         />
                       </View>
-                      <Text style={styles.betType}>
+                      <Text style={styles.betType} numberOfLines={1}>
                         {bet.bet_type
                           ? bet.bet_type === 'over_under'
                             ? 'Over/Under'
@@ -499,27 +680,25 @@ export default function HomeScreen() {
                         </View>
                         <View style={styles.statItem}>
                           <Text style={styles.statLabel}>ROI</Text>
-                          <Text style={[styles.roiValue, { color: roiPctValue < 0 ? '#E85D5D' : colors.accent }]}>
+                          <Text style={[styles.roiValue, { color: roiPctValue < 0 ? colors.loss : colors.accent }]}>
                             {showBalance ? formatROI(roiPctValue) : '••••'}
                           </Text>
                         </View>
                       </View>
                       <View style={styles.activityFooter}>
-                        <Text style={styles.timestamp}>{ts}</Text>
+                        <Text style={styles.timestamp} numberOfLines={1}>{ts}</Text>
                         <Text style={styles.betId}>
                           #{String(bet.id).slice(-4)}
                         </Text>
                       </View>
-                    </AnimatedPressable>
-                  </FadeInView>
+                    </TouchableOpacity>
                 );
               })}
             </View>
           </>
         )}
-      </Animated.ScrollView>
+      </ScrollView>
     </SafeAreaView>
-    </TabScreenTransition>
   );
 }
 
@@ -553,7 +732,10 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
-    boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 3,
   },
   profitLabel: {
@@ -588,43 +770,80 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     fontWeight: '600',
     color: colors.accent,
   },
-  tabsContainer: {
-    flexDirection: 'row',
-    marginBottom: 24,
-    gap: 8,
-  },
-  tab: {
-    backgroundColor: colors.chipBg,
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-  },
-  tabActive: {
-    backgroundColor: colors.chipActiveBg,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  tabTextActive: {
-    color: colors.chipActiveText,
-  },
   chartCard: {
     backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
-    boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 3,
-    overflow: 'hidden',
+    position: 'relative' as const,
+    zIndex: 10,
+  },
+  chartHeaderRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: 16,
   },
   chartLabel: {
     fontSize: 14,
     fontWeight: '400',
     color: colors.textSecondary,
     letterSpacing: 0.5,
-    marginBottom: 16,
+  },
+  filterPill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: `${colors.border}4D`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: 8,
+  },
+  filterPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  filterDropdown: {
+    position: 'absolute' as const,
+    top: 48,
+    right: 20,
+    width: 140,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 4,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  filterDropdownItem: {
+    height: 36,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    justifyContent: 'center' as const,
+  },
+  filterDropdownItemActive: {
+    backgroundColor: 'rgba(45, 198, 114, 0.12)',
+  },
+  filterDropdownText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  filterDropdownTextActive: {
+    color: colors.accent,
+    fontWeight: '600',
   },
   activitySection: {
     marginBottom: 24,
@@ -655,7 +874,10 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.03)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
     elevation: 2,
   },
   activityHeader: {
@@ -803,7 +1025,10 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     borderRadius: 16,
     padding: 32,
     alignItems: 'center',
-    boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 3,
   },
   uploadCtaIconCircle: {
@@ -826,6 +1051,40 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  insightBanner: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
+  },
+  insightBannerText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: colors.text,
+  },
+  seasonBanner: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
+  },
+  seasonBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: colors.text,
   },
   });
 }

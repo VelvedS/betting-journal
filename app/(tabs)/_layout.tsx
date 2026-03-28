@@ -8,8 +8,6 @@ export default function TabLayout() {
       tabBar={(props) => <LiquidGlassTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        animation: 'fade' as any,
-        animationDuration: 200,
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />

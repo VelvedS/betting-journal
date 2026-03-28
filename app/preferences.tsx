@@ -765,10 +765,10 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       backgroundColor: colors.background, borderRadius: 10, padding: 14,
     },
     dangerIconCircle: {
-      width: 44, height: 44, borderRadius: 22, backgroundColor: '#E85D5D',
+      width: 44, height: 44, borderRadius: 22, backgroundColor: colors.loss,
       alignItems: 'center', justifyContent: 'center', marginRight: 14,
     },
-    dangerTitle: { fontSize: 15, fontWeight: '700', color: '#E85D5D', marginBottom: 3 },
+    dangerTitle: { fontSize: 15, fontWeight: '700', color: colors.loss, marginBottom: 3 },
 
     // Toast
     toast: {
@@ -778,7 +778,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       shadowOpacity: 0.18, shadowRadius: 8, elevation: 6,
     },
     toastSuccess: { backgroundColor: colors.accent },
-    toastError: { backgroundColor: '#E85D5D' },
+    toastError: { backgroundColor: colors.loss },
     toastText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', flex: 1 },
   });
 }

@@ -546,17 +546,17 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1,
       borderColor: '#FFCCCC', padding: 20, marginBottom: 20,
     },
-    dangerTitle: { fontSize: 16, fontWeight: '700', color: '#E85D5D', marginBottom: 8 },
+    dangerTitle: { fontSize: 16, fontWeight: '700', color: colors.loss, marginBottom: 8 },
     dangerDescription: {
       fontSize: 13, fontWeight: '400', color: colors.text,
       lineHeight: 19, marginBottom: 16,
     },
     deleteButton: {
       backgroundColor: 'transparent', borderRadius: 10, borderWidth: 1,
-      borderColor: '#E85D5D', paddingVertical: 12,
+      borderColor: colors.loss, paddingVertical: 12,
       alignItems: 'center', justifyContent: 'center', height: 46,
     },
-    deleteButtonText: { fontSize: 15, fontWeight: '700', color: '#E85D5D' },
+    deleteButtonText: { fontSize: 15, fontWeight: '700', color: colors.loss },
 
     // Toast
     toast: {
@@ -567,7 +567,7 @@ function createStyles(colors: ReturnType<typeof import('@/context/ThemeContext')
       shadowOpacity: 0.18, shadowRadius: 8, elevation: 6,
     },
     toastSuccess: { backgroundColor: colors.accent },
-    toastError: { backgroundColor: '#E85D5D' },
+    toastError: { backgroundColor: colors.loss },
     toastText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', flex: 1 },
   });
 }
