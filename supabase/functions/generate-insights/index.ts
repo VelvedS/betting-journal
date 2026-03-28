@@ -101,31 +101,48 @@ serve(async (req) => {
       )
     }
 
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: `Here is my complete betting data. Generate behavioral insights:\n\n${JSON.stringify(dataSnapshot)}`,
-          },
-        ],
-      }),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000)
+
+    let anthropicRes: Response
+    try {
+      anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1500,
+          system: SYSTEM_PROMPT,
+          messages: [
+            {
+              role: 'user',
+              content: `Here is my complete betting data. Generate behavioral insights:\n\n${JSON.stringify(dataSnapshot)}`,
+            },
+          ],
+        }),
+      })
+    } catch (err) {
+      clearTimeout(timeout)
+      if (err.name === 'AbortError') {
+        return new Response(
+          JSON.stringify({ error: 'Request timed out. Please try again.' }),
+          { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        )
+      }
+      throw err
+    }
+    clearTimeout(timeout)
 
     if (!anthropicRes.ok) {
       const errBody = await anthropicRes.text()
       console.error('Anthropic API error:', anthropicRes.status, errBody)
       return new Response(
-        JSON.stringify({ error: `AI service error (${anthropicRes.status}). Please try again later.` }),
+        JSON.stringify({ error: 'AI analysis temporarily unavailable. Please try again later.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
       )
     }

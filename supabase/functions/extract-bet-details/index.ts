@@ -39,20 +39,23 @@ serve(async (req) => {
 
     const userId = user.id
 
-    // Rate limit: 10 extractions per hour per user
+    // Rate limit: 15 scans per hour per user
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-    const { count, error: countError } = await supabaseAdmin
-      .from('bets')
+    const { count } = await supabaseAdmin
+      .from('scan_attempts')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .gte('created_at', oneHourAgo)
+      .gte('attempted_at', oneHourAgo)
 
-    if (!countError && (count ?? 0) >= 10) {
+    if ((count ?? 0) >= 15) {
       return new Response(
-        JSON.stringify({ error: 'Rate limit exceeded. Please wait before scanning more slips.' }),
+        JSON.stringify({ error: 'Scan limit reached. Please wait before scanning more slips.' }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // Log the scan attempt BEFORE calling Claude
+    await supabaseAdmin.from('scan_attempts').insert({ user_id: userId })
 
     const { image_url } = await req.json()
 
@@ -71,7 +74,7 @@ serve(async (req) => {
     }
 
     // Sanitize path — reject traversal attempts
-    if (filePath.includes('..') || filePath.includes('//') || !filePath.match(/^[a-zA-Z0-9_\-\/\.]+$/)) {
+    if (filePath.includes('..') || filePath.includes('//') || !filePath.match(/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp)$/i)) {
       return new Response(
         JSON.stringify({ error: 'Invalid file path' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -91,6 +94,15 @@ serve(async (req) => {
     }
 
     const arrayBuffer = await fileData.arrayBuffer()
+
+    // Server-side file size check (10MB max)
+    if (arrayBuffer.byteLength > 10 * 1024 * 1024) {
+      return new Response(
+        JSON.stringify({ error: 'Image too large. Please upload an image under 10MB.' }),
+        { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const bytes = new Uint8Array(arrayBuffer)
     let binary = ''
     const chunkSize = 8192
@@ -103,6 +115,15 @@ serve(async (req) => {
     const base64Image = btoa(binary)
     const contentType = fileData.type || 'image/jpeg'
 
+    // Server-side MIME type validation
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
+    if (!allowedMimeTypes.includes(contentType)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid file type. Please upload a JPEG, PNG, or WebP image.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Call Claude Vision API
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
     if (!anthropicKey) {
@@ -112,13 +133,19 @@ serve(async (req) => {
       )
     }
 
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000)
+
+    let claudeResponse: Response
+    try {
+      claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': anthropicKey,
         'anthropic-version': '2023-06-01'
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 2048,
@@ -182,6 +209,17 @@ JSON STRUCTURE:
         ]
       })
     })
+    } catch (err) {
+      clearTimeout(timeout)
+      if (err.name === 'AbortError') {
+        return new Response(
+          JSON.stringify({ error: 'Request timed out. Please try again.' }),
+          { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      throw err
+    }
+    clearTimeout(timeout)
 
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text()
