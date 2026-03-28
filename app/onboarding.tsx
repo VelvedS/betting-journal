@@ -80,9 +80,7 @@ export default function OnboardingScreen() {
 
   const goToPage = useCallback((page: number) => {
     scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: true });
-    // activeIndex will be set by onMomentumScrollEnd, but also set it eagerly
-    // for immediate button label change
-    setActiveIndex(page);
+    // Don't set activeIndex here — let onMomentumScrollEnd handle it
   }, []);
 
   const markOnboardingDone = useCallback(async () => {
@@ -94,12 +92,12 @@ export default function OnboardingScreen() {
       goToPage(activeIndex + 1);
     } else {
       // Last page — Get Started
-      markOnboardingDone().catch(() => {}).then(() => router.replace('/signup'));
+      markOnboardingDone().catch(err => console.warn('[Onboarding] Storage error:', err)).then(() => router.replace('/signup'));
     }
   }, [activeIndex]);
 
   const handleSkip = useCallback(() => {
-    markOnboardingDone().catch(() => {}).then(() => router.replace('/'));
+    markOnboardingDone().catch(err => console.warn('[Onboarding] Storage error:', err)).then(() => router.replace('/'));
   }, []);
 
   const isLastPage = activeIndex === PAGE_COUNT - 1;

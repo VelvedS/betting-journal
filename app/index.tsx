@@ -34,7 +34,7 @@ export default function LoginScreen() {
       } else {
         setOnboardingChecked(true);
       }
-    });
+    }).catch(err => console.warn('[Root] AsyncStorage error:', err));
   }, [session, authLoading]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

@@ -37,8 +37,12 @@ export default function AnimatedNumber({
         setDisplayValue(value);
       });
     }, delay);
-    return () => clearTimeout(timer);
-  }, [value]);
+    return () => {
+      clearTimeout(timer);
+      animValue.removeAllListeners();
+      animValue.stopAnimation();
+    };
+  }, [value, duration, delay]);
 
   const formatted = decimals > 0
     ? displayValue.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })

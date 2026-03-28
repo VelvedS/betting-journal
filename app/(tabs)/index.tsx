@@ -186,7 +186,7 @@ export default function HomeScreen() {
               if (finished) runOnJS(dismissBanner)();
             });
           }, 5000);
-        } catch {}
+        } catch (err) { console.warn('[Dashboard] Alert parse error:', err); }
       })();
 
       // Check for season report banners

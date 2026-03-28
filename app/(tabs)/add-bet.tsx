@@ -290,6 +290,7 @@ export default function AddBetScreen() {
     });
 
     if (result.canceled) return;
+    if (!result.assets?.length) return;
 
     const uri = result.assets[0].uri;
     setScreen('processing');
@@ -325,6 +326,7 @@ export default function AddBetScreen() {
     });
 
     if (result.canceled) return;
+    if (!result.assets?.length) return;
 
     const uri = result.assets[0].uri;
     setScreen('processing');
