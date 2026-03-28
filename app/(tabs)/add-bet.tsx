@@ -156,15 +156,7 @@ export default function AddBetScreen() {
       }
 
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-      console.log('Calling Edge Function with URL:', supabaseUrl + '/functions/v1/extract-bet-details');
-      console.log('Image URL being sent:', uploadedImageUrl);
-      console.log('Session token:', session.access_token ? 'Present' : 'Missing');
-      console.log('Session user ID:', session.user.id);
-      console.log('Session user email:', session.user.email);
-      console.log('Access token first 20 chars:', session.access_token.substring(0, 20));
-      console.log('Token expires at:', session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'undefined');
-      console.log('Current time:', new Date().toISOString());
-      console.log('Apikey first 20 chars:', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20));
+      console.log('Calling Edge Function for bet extraction');
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/extract-bet-details`,
@@ -177,7 +169,6 @@ export default function AddBetScreen() {
           },
           body: JSON.stringify({
             image_url: uploadedStoragePath,
-            user_id: session.user.id
           })
         }
       );
@@ -292,7 +283,22 @@ export default function AddBetScreen() {
     if (result.canceled) return;
     if (!result.assets?.length) return;
 
-    const uri = result.assets[0].uri;
+    const asset = result.assets[0];
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    if (asset.type && !allowedTypes.includes(asset.type)) {
+      Alert.alert('Invalid File', 'Please upload a JPEG or PNG image.');
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      Alert.alert('File Too Large', 'Please upload an image under 10MB.');
+      return;
+    }
+
+    const uri = asset.uri;
     setScreen('processing');
 
     const uploadResult = await uploadImageToStorage(uri);
@@ -328,7 +334,22 @@ export default function AddBetScreen() {
     if (result.canceled) return;
     if (!result.assets?.length) return;
 
-    const uri = result.assets[0].uri;
+    const asset = result.assets[0];
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    if (asset.type && !allowedTypes.includes(asset.type)) {
+      Alert.alert('Invalid File', 'Please upload a JPEG or PNG image.');
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      Alert.alert('File Too Large', 'Please upload an image under 10MB.');
+      return;
+    }
+
+    const uri = asset.uri;
     setScreen('processing');
 
     const uploadResult = await uploadImageToStorage(uri);

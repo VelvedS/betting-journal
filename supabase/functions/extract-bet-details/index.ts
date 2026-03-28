@@ -13,22 +13,55 @@ serve(async (req) => {
   }
 
   try {
-    const { image_url, user_id } = await req.json()
-    console.log('DEBUG image_url received:', image_url)
-    console.log('DEBUG user_id received:', user_id)
-
-    if (!image_url || !user_id) {
+    // Verify JWT
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Missing image_url or user_id' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Download image from Supabase Storage using admin client (supports private buckets)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const userId = user.id
+
+    // Rate limit: 10 extractions per hour per user
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const { count, error: countError } = await supabaseAdmin
+      .from('bets')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', oneHourAgo)
+
+    if (!countError && (count ?? 0) >= 10) {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded. Please wait before scanning more slips.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { image_url } = await req.json()
+
+    if (!image_url) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Missing image_url' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
 
     // Extract file path — handle raw storage path or full public URL
     let filePath = image_url
@@ -36,16 +69,19 @@ serve(async (req) => {
       const urlParts = image_url.split('betting-slips/')
       filePath = urlParts[urlParts.length - 1]
     }
-    console.log('DEBUG filePath extracted:', filePath)
+
+    // Sanitize path — reject traversal attempts
+    if (filePath.includes('..') || filePath.includes('//') || !filePath.match(/^[a-zA-Z0-9_\-\/\.]+$/)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid file path' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     const { data: fileData, error: downloadError } = await supabaseAdmin
       .storage
       .from('betting-slips')
       .download(filePath)
-
-    console.log('DEBUG download error:', downloadError)
-    console.log('DEBUG fileData exists:', !!fileData)
-    console.log('DEBUG fileData size:', fileData?.size)
 
     if (downloadError || !fileData) {
       return new Response(
@@ -53,10 +89,6 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
-
-    console.log('DEBUG fileData type:', typeof fileData)
-    console.log('DEBUG fileData constructor:', fileData?.constructor?.name)
-    console.log('DEBUG fileData size:', fileData?.size)
 
     const arrayBuffer = await fileData.arrayBuffer()
     const bytes = new Uint8Array(arrayBuffer)
@@ -69,7 +101,6 @@ serve(async (req) => {
       }
     }
     const base64Image = btoa(binary)
-    console.log('DEBUG base64 length after fix:', base64Image.length)
     const contentType = fileData.type || 'image/jpeg'
 
     // Call Claude Vision API
